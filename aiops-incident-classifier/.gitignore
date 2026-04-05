@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+*.pkl
+.venv/
+venv/
+node_modules/
+dist/
+backend/data/incidents.json
+.DS_Store
