@@ -1,0 +1,74 @@
+{
+  "name": "ai-compliance-as-code",
+  "displayName": "AI Compliance as Code",
+  "description": "Real-time GDPR, PCI-DSS, and MiCA compliance analysis powered by a local LLM engine.",
+  "publisher": "sankar",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:java",
+    "onLanguage:python",
+    "onLanguage:javascript",
+    "onLanguage:typescript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cac.analyze",
+        "title": "CaC: Analyze Current File"
+      }
+    ],
+    "configuration": {
+      "title": "AI Compliance as Code",
+      "properties": {
+        "cac.engineUrl": {
+          "type": "string",
+          "default": "http://localhost:8001",
+          "description": "Base URL of the compliance engine FastAPI server."
+        },
+        "cac.regulation": {
+          "type": "string",
+          "default": "GDPR",
+          "enum": ["GDPR", "PCI-DSS", "MiCA"],
+          "enumDescriptions": [
+            "General Data Protection Regulation (EU)",
+            "Payment Card Industry Data Security Standard v4.0",
+            "Markets in Crypto-Assets Regulation (EU) 2023/1114"
+          ],
+          "description": "Active regulation to enforce during analysis."
+        },
+        "cac.debounceMs": {
+          "type": "number",
+          "default": 600,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Milliseconds to wait after the last keystroke before triggering analysis."
+        },
+        "cac.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable live compliance analysis."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.0.0"
+  }
+}

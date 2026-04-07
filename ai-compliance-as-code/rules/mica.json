@@ -1,0 +1,164 @@
+{
+  "regulation": {
+    "id": "MiCA",
+    "full_name": "Markets in Crypto-Assets Regulation",
+    "version": "2023/1114",
+    "jurisdiction": "European Union",
+    "scope": "Issuers of crypto-assets (including asset-referenced tokens and e-money tokens), crypto-asset service providers (CASPs), and trading platforms operating within the EU/EEA.",
+    "official_reference": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114"
+  },
+  "rules": [
+    {
+      "id": "MiCA-Art.30",
+      "title": "Whitepaper accuracy and completeness",
+      "description": "Issuers of crypto-assets must publish a crypto-asset whitepaper that is accurate, clear, and not misleading. The whitepaper must describe the project, the rights and obligations of holders, the technology used, and the risks involved. Any material change must be notified and a revised whitepaper published.",
+      "default_severity": "high",
+      "check_hints": [
+        "Whitepaper generation code that omits required fields: issuer identity, technology description, rights of holders, risk factors",
+        "No versioning or immutable storage mechanism for the whitepaper document",
+        "Whitepaper content generated dynamically without audit trail or change notification",
+        "Missing fields: project description, token supply, distribution plan, use of proceeds",
+        "No mechanism to notify competent authority of material changes to whitepaper"
+      ],
+      "non_compliant_patterns": [
+        "whitepaper = generate_whitepaper(partial_data) — missing required sections",
+        "No hash or IPFS pin stored for whitepaper to prove immutability",
+        "Content management system allows overwriting published whitepaper without versioning"
+      ],
+      "remediation_guidance": "Implement a whitepaper schema validator that checks all required Art.30 fields before publication. Store the whitepaper with a cryptographic hash on-chain or in immutable storage. Add a change-notification workflow that flags material updates and triggers competent authority notification.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e3200-1-1"
+      ]
+    },
+    {
+      "id": "MiCA-Art.33",
+      "title": "Marketing communications — fair and clear",
+      "description": "Marketing communications related to crypto-assets must be clearly identifiable as such, be fair, clear, and not misleading, consistent with the information in the whitepaper, and include a statement that a whitepaper has been published. Marketing communications must not contain untrue, inaccurate, or deceptive information.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Marketing copy generation that uses superlative or unsubstantiated return claims",
+        "Email or push notification templates that do not include the mandatory whitepaper reference",
+        "A/B test variants that omit risk disclosures present in the whitepaper",
+        "Automated social media posting without compliance review gate",
+        "No flag or metadata marking content as a marketing communication"
+      ],
+      "non_compliant_patterns": [
+        "sendMarketingEmail(content) without whitepaper_url field",
+        "notification.body = 'Guaranteed 10x returns' — unsubstantiated claim",
+        "No is_marketing_communication flag or disclaimer in outbound content schema"
+      ],
+      "remediation_guidance": "Add a MarketingContentValidator that checks for: (1) whitepaper URL presence, (2) no guaranteed-return language, (3) required risk disclaimer, (4) is_marketing_communication flag. Gate all outbound content through this validator before dispatch.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e3400-1-1"
+      ]
+    },
+    {
+      "id": "MiCA-Art.70",
+      "title": "Safekeeping of client assets",
+      "description": "Crypto-asset service providers must implement arrangements for safekeeping clients' crypto-assets and the means of access to them (private keys). CASPs must segregate client assets from their own assets, maintain records of each client's holdings, and have robust custody and key management procedures. Loss of client assets due to key mismanagement is a serious violation.",
+      "default_severity": "high",
+      "check_hints": [
+        "Private keys or seed phrases stored in plaintext in the database or config files",
+        "No HSM, secure enclave, or key management service (KMS) used for private key storage",
+        "Client private keys mixed with platform operational keys — no segregation",
+        "No multi-signature or threshold signature scheme for high-value wallets",
+        "Key rotation not implemented or private keys never rotated",
+        "Private keys logged to application logs or included in error messages",
+        "Seed phrases committed to version control or present in environment variables"
+      ],
+      "non_compliant_patterns": [
+        "PRIVATE_KEY = 'abc123...' — hardcoded private key",
+        "db.save(user_id, private_key=raw_key) — plaintext key in database",
+        "logger.error(f'Key error for {private_key}') — key in log",
+        "os.getenv('SEED_PHRASE') — seed phrase in environment variable",
+        "No call to KMS, HSM, or hardware wallet API in key generation/storage path"
+      ],
+      "remediation_guidance": "Store all private keys via a dedicated KMS (AWS KMS, HashiCorp Vault, GCP Cloud KMS). Never log, print, or transmit raw private keys. Implement multi-sig for custodial wallets above threshold amounts. Segregate client key namespaces from operational keys. Enforce key rotation policies and audit key access events.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e6200-1-1",
+        "https://www.eba.europa.eu/regulation-and-policy/crypto-assets"
+      ]
+    },
+    {
+      "id": "MiCA-Art.72",
+      "title": "Complaints handling procedures",
+      "description": "CASPs must establish, maintain, and implement effective and transparent procedures for prompt handling of complaints from clients. CASPs must keep records of all complaints and remedial actions taken. Responses must be provided free of charge and within prescribed timeframes.",
+      "default_severity": "low",
+      "check_hints": [
+        "No complaints endpoint or handler in the API surface",
+        "Complaints stored but no SLA or response-deadline field tracked",
+        "No status tracking for complaints (open/in-progress/resolved)",
+        "Complaints data not segregated or accessible to compliance officers",
+        "No audit log of actions taken on a complaint"
+      ],
+      "non_compliant_patterns": [
+        "No POST /complaints or equivalent endpoint in API routes",
+        "Complaint model missing fields: submitted_at, status, resolution_deadline, resolved_at",
+        "No role-based access control restricting complaint data to compliance role"
+      ],
+      "remediation_guidance": "Implement a ComplaintsService with create, acknowledge, escalate, and resolve operations. Store submitted_at, SLA deadline (T+15 business days), status, assigned_to, and resolution_notes. Expose a compliance dashboard showing open complaints past SLA. Emit audit events on every state transition.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e6400-1-1"
+      ]
+    },
+    {
+      "id": "MiCA-Art.76",
+      "title": "Detection and reporting of market abuse",
+      "description": "CASPs must have systems and procedures to detect, prevent, and report market abuse including insider dealing, market manipulation, and unlawful disclosure of inside information. Suspicious transactions must be reported to the competent authority without delay.",
+      "default_severity": "high",
+      "check_hints": [
+        "No trade surveillance or anomaly detection logic in the trading or order-matching code",
+        "Insider information accessible to trading accounts without access controls",
+        "No suspicious transaction report (STR) workflow or competent authority notification",
+        "Order book data exposed without rate limiting — susceptible to front-running detection bypass",
+        "No audit log of large or unusual trades with counterparty identifiers",
+        "wash_trading or spoofing detection absent from order validation pipeline"
+      ],
+      "non_compliant_patterns": [
+        "order_book.execute(order) with no pre-trade surveillance check",
+        "No call to compliance_reporter.flag_suspicious(trade) in post-trade processing",
+        "SELECT * FROM trades WHERE user_id = ? — no pattern analysis for unusual sequences",
+        "Inside information stored in unprotected table accessible by trading service"
+      ],
+      "remediation_guidance": "Integrate a trade surveillance module that flags orders exceeding configurable thresholds (volume, price deviation, frequency). Implement an STR workflow with automatic escalation to compliance officers and a competent authority notification queue. Enforce strict access controls on non-public price-sensitive information using row-level security.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e6800-1-1",
+        "https://www.esma.europa.eu/regulation/crypto-assets"
+      ]
+    },
+    {
+      "id": "MiCA-Art.83",
+      "title": "Resilience, business continuity, and security",
+      "description": "CASPs must have ICT systems and security risk management procedures that ensure resilience, availability, and security of services. This includes business continuity plans, disaster recovery arrangements, regular security testing, and incident reporting to the competent authority within prescribed timeframes.",
+      "default_severity": "high",
+      "check_hints": [
+        "No rate limiting or circuit breaker on critical trading or wallet endpoints",
+        "Missing health check or readiness probe on services handling client assets",
+        "No incident response procedure or automated alerting for service disruptions",
+        "Database without backup configuration or point-in-time recovery",
+        "TLS disabled or outdated version on any endpoint handling crypto-asset transactions",
+        "No DDoS protection on public-facing order submission or withdrawal endpoints",
+        "Hardcoded credentials or API keys for exchange or custody integrations"
+      ],
+      "non_compliant_patterns": [
+        "requests.get(url, verify=False) — TLS validation disabled",
+        "EXCHANGE_API_KEY = 'hardcoded-key' — credential in source code",
+        "No retry logic or circuit breaker around custodian API calls",
+        "No /health or /ready endpoint on the trading service",
+        "No automated backup schedule defined for wallet or ledger database"
+      ],
+      "remediation_guidance": "Implement circuit breakers (e.g. tenacity, resilience4j) around all external custodian and exchange calls. Add rate limiting on withdrawal and order endpoints. Enforce TLS 1.2+ with certificate pinning for custodian integrations. Store all credentials in a secrets manager. Define and test a BCP/DR runbook with RTO/RPO targets. Configure automated alerting for service degradation.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114#d1e7200-1-1",
+        "https://www.esma.europa.eu/regulation/crypto-assets"
+      ]
+    }
+  ],
+  "risk_indicator_severities": {
+    "missing_kyc_check":       { "severity": "high",   "rule_ref": "MiCA-Art.70", "title": "No identity verification before transfer" },
+    "travel_rule_threshold":   { "severity": "high",   "rule_ref": "MiCA-Art.68", "title": "Transfer ≥ €1 000 without originator info" },
+    "duplicate_transfer":      { "severity": "high",   "rule_ref": "MiCA-Art.70", "title": "Duplicate walletService.send() — potential double-spend" },
+    "missing_audit_log":       { "severity": "medium", "rule_ref": "MiCA-Art.76", "title": "No audit log around transfer operation" },
+    "crypto_address_in_scope": { "severity": "low",    "rule_ref": "MiCA-Art.68", "title": "Crypto wallet address field detected" }
+  }
+}

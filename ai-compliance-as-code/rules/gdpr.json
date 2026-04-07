@@ -1,0 +1,173 @@
+{
+  "regulation": {
+    "id": "GDPR",
+    "full_name": "General Data Protection Regulation",
+    "version": "2016/679",
+    "jurisdiction": "European Union",
+    "scope": "Any system that processes personal data of EU/EEA data subjects, regardless of where the processor is established.",
+    "official_reference": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679"
+  },
+  "rules": [
+    {
+      "id": "GDPR-Art.5",
+      "title": "Principles relating to processing of personal data",
+      "description": "Personal data must be processed lawfully, fairly, and transparently; collected for specified, explicit, and legitimate purposes (purpose limitation); limited to what is necessary (data minimisation); kept accurate; stored no longer than necessary (storage limitation); and processed with appropriate security (integrity and confidentiality). The controller is accountable for demonstrating compliance.",
+      "default_severity": "high",
+      "sub_principles": [
+        "Art.5(1)(a) — Lawfulness, fairness, transparency",
+        "Art.5(1)(b) — Purpose limitation",
+        "Art.5(1)(c) — Data minimisation",
+        "Art.5(1)(d) — Accuracy",
+        "Art.5(1)(e) — Storage limitation",
+        "Art.5(1)(f) — Integrity and confidentiality",
+        "Art.5(2)   — Accountability"
+      ],
+      "check_hints": [
+        "Personal data fields collected beyond the declared purpose of the feature",
+        "No data retention / TTL policy enforced in database models or cache layers",
+        "Absence of a data minimisation review: forms or APIs requesting more fields than needed",
+        "PII logged to application logs (names, emails, IPs, device IDs) without pseudonymisation",
+        "No accountability trail: missing audit log for create/read/update/delete on personal data",
+        "Data shared with third parties without a documented legal basis or processor agreement"
+      ],
+      "non_compliant_patterns": [
+        "SELECT * FROM users — selecting all columns including PII when only ID is needed",
+        "console.log(user) — logging full user objects containing PII",
+        "INSERT INTO analytics (user_email, ...) — storing PII in analytics tables without purpose check",
+        "No cron job or scheduled task to purge expired personal data records"
+      ],
+      "remediation_guidance": "Implement a Data Processing Register (ROPA). Add column-level annotations for PII fields. Enforce retention policies via scheduled jobs. Replace full-object logging with structured logging that omits or pseudonymises PII fields.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e1797-1-1",
+        "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-42019-article-25-data-protection-design-and_en"
+      ]
+    },
+    {
+      "id": "GDPR-Art.6",
+      "title": "Lawfulness of processing — legal basis",
+      "description": "Processing of personal data is lawful only if at least one of six legal bases applies: (a) consent of the data subject; (b) performance of a contract; (c) compliance with a legal obligation; (d) protection of vital interests; (e) public task; or (f) legitimate interests of the controller, provided they are not overridden by the interests of the data subject.",
+      "default_severity": "high",
+      "legal_bases": [
+        "Art.6(1)(a) — Consent (must be freely given, specific, informed, unambiguous)",
+        "Art.6(1)(b) — Contract performance",
+        "Art.6(1)(c) — Legal obligation",
+        "Art.6(1)(d) — Vital interests",
+        "Art.6(1)(e) — Public task",
+        "Art.6(1)(f) — Legitimate interests (requires Legitimate Interests Assessment)"
+      ],
+      "check_hints": [
+        "Processing of personal data with no consent gate, contract linkage, or documented legal basis",
+        "Consent collected but not recorded with timestamp, version of privacy notice, and scope",
+        "Processing commences before consent is confirmed (race condition in async consent flows)",
+        "Consent bundled together with terms of service — not freely given or specific",
+        "Legitimate interest used as a catch-all without a documented LIA on file",
+        "Email marketing sent without explicit opt-in consent",
+        "Data subject's personal data processed after consent is withdrawn"
+      ],
+      "non_compliant_patterns": [
+        "sendMarketingEmail(user.email) called without checking user.marketing_consent === true",
+        "User profile created and data processed before consent confirmation callback resolves",
+        "Single checkbox: 'I agree to Terms of Service and Privacy Policy and marketing'",
+        "No consent record table or consent_log in the database schema"
+      ],
+      "remediation_guidance": "Implement a ConsentService that gates all personal-data processing. Store consent records with data_subject_id, timestamp, privacy_notice_version, scope[], and ip_address. Handle consent withdrawal by immediately halting processing and propagating deletion/suppression signals.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e1874-1-1",
+        "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-052020-consent-under-regulation-2016679_en"
+      ]
+    },
+    {
+      "id": "GDPR-Art.17",
+      "title": "Right to erasure ('right to be forgotten')",
+      "description": "Data subjects have the right to obtain erasure of their personal data without undue delay when: the data is no longer necessary for the purpose collected; consent is withdrawn and no other legal basis applies; the subject objects and there is no overriding legitimate interest; the data was unlawfully processed; or erasure is required by law. The controller must also inform any processors or third parties to whom data was disclosed.",
+      "default_severity": "high",
+      "check_hints": [
+        "No erasure endpoint or handler (e.g. DELETE /users/{id} or AccountDeletionService)",
+        "Erasure handler deletes from primary table but leaves PII in: audit logs, analytics tables, search indexes, data warehouse, backups, CDN caches, or third-party integrations",
+        "Erasure is soft-delete only (deleted_at flag) with PII still readable in the database",
+        "No propagation to downstream processors — third-party services not notified on erasure",
+        "Erasure request queued but no SLA enforced (GDPR requires 'without undue delay', max 30 days)",
+        "Pseudonymisation used for erasure but a re-identification key is retained",
+        "No mechanism to handle erasure of data in event-sourced systems or immutable logs"
+      ],
+      "non_compliant_patterns": [
+        "UPDATE users SET deleted_at = NOW() WHERE id = ? — soft delete, PII still in DB",
+        "DELETE FROM users WHERE id = ? — primary table only, backup/analytics not cleaned",
+        "No call to stripe.customers.del(), sendgrid suppression list, or similar on account deletion",
+        "Erasure handler returns 200 OK without verifying all data stores were cleared"
+      ],
+      "remediation_guidance": "Implement a choreography-based erasure saga that publishes a UserErasureRequested event consumed by every service storing personal data. Track erasure task completion per data store. Store only a pseudonymous tombstone record. Schedule verification that PII is absent from all downstream sinks within 30 days.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e2606-1-1",
+        "https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/individual-rights/right-to-erasure/"
+      ]
+    },
+    {
+      "id": "GDPR-Art.25",
+      "title": "Data protection by design and by default",
+      "description": "Controllers must implement appropriate technical and organisational measures both at the time of designing the processing system and at the time of processing itself. By default, only personal data necessary for each specific purpose must be processed — this applies to the amount collected, the extent of processing, the storage period, and accessibility.",
+      "default_severity": "medium",
+      "check_hints": [
+        "No pseudonymisation or encryption applied to personal data fields in database models",
+        "API responses returning full PII objects when only a subset is required by the consumer",
+        "Default settings expose personal data: public profile pages, opt-out rather than opt-in marketing",
+        "Personal data accessible to all internal roles without role-based access control (RBAC)",
+        "No field-level access control: all columns returned regardless of caller's permission scope",
+        "PII present in URL query parameters (logged by proxies, bookmarks, referrer headers)",
+        "No privacy impact assessment (DPIA) artefact linked to high-risk processing features",
+        "Third-party SDKs/analytics scripts loaded without data-minimisation configuration"
+      ],
+      "non_compliant_patterns": [
+        "GET /api/users returns { id, name, email, phone, address, dob } to all authenticated callers",
+        "router.get('/search?query=john.doe@example.com') — PII in URL",
+        "User object passed directly to analytics SDK: analytics.identify(user)",
+        "No @Encrypted or @Pseudonymised annotation on PII columns in ORM models",
+        "Role check absent: if (user.isAdmin) — missing for read paths on personal data"
+      ],
+      "remediation_guidance": "Apply the principle of least privilege at both the API (response shaping) and database (column-level grants) layers. Use pseudonymisation for analytics. Annotate PII fields in data models and enforce encryption at the ORM layer. Make privacy-preserving options the default (opt-in, not opt-out).",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3150-1-1",
+        "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-42019-article-25-data-protection-design-and_en"
+      ]
+    },
+    {
+      "id": "GDPR-Art.32",
+      "title": "Security of processing",
+      "description": "Controllers and processors must implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk, including: pseudonymisation and encryption of personal data; ongoing confidentiality, integrity, availability, and resilience of systems; ability to restore data after an incident; and regular testing and evaluation of security measures.",
+      "default_severity": "high",
+      "security_measures": [
+        "Art.32(1)(a) — Pseudonymisation and encryption",
+        "Art.32(1)(b) — Ongoing confidentiality, integrity, availability, resilience",
+        "Art.32(1)(c) — Ability to restore availability after an incident",
+        "Art.32(1)(d) — Regular testing, assessing, and evaluating effectiveness"
+      ],
+      "check_hints": [
+        "Personal data stored in plaintext in the database (no encryption at rest)",
+        "Sensitive data transmitted over HTTP (not HTTPS/TLS 1.2+)",
+        "Encryption using deprecated algorithms: MD5, SHA-1, DES, 3DES, RC4, ECB mode",
+        "Hardcoded encryption keys or secrets in source code or config files",
+        "No key rotation mechanism for encryption keys protecting personal data",
+        "Missing TLS certificate validation (verify=False, InsecureSkipVerify=true)",
+        "Personal data in backups not encrypted with a separate key",
+        "No intrusion detection, anomaly alerting, or breach notification mechanism",
+        "Session tokens or JWTs containing PII without encryption (only signed, not encrypted)",
+        "No rate limiting or brute-force protection on authentication endpoints"
+      ],
+      "non_compliant_patterns": [
+        "password_hash = md5(password) — weak hashing algorithm",
+        "requests.get(url, verify=False) — TLS validation disabled",
+        "SECRET_KEY = 'hardcoded-secret-key-123' — hardcoded secret",
+        "AES cipher initialised in ECB mode — does not provide semantic security",
+        "jwt.decode(token, options={'verify_signature': False}) — signature not verified",
+        "db.connect('mysql://user:password@host/db') — credentials in connection string",
+        "No bcrypt/argon2/scrypt usage for password storage — plain SHA-256 used"
+      ],
+      "remediation_guidance": "Use bcrypt, Argon2id, or scrypt for password hashing. Enforce TLS 1.2+ with valid certificates. Store secrets in a secrets manager (Vault, AWS Secrets Manager). Use AES-256-GCM for data at rest. Implement key rotation policies. Add anomaly detection alerts for unusual access patterns on personal data stores.",
+      "references": [
+        "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3383-1-1",
+        "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-012021-examples-personal-data-breach-notification_en",
+        "https://owasp.org/www-project-top-ten/"
+      ]
+    }
+  ]
+}

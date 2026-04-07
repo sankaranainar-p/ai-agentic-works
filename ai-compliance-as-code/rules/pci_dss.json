@@ -1,0 +1,313 @@
+{
+  "regulation": {
+    "id": "PCI-DSS",
+    "full_name": "Payment Card Industry Data Security Standard",
+    "version": "4.0",
+    "jurisdiction": "Global",
+    "scope": "Any system that stores, processes, or transmits cardholder data (CHD) or sensitive authentication data (SAD), including the cardholder data environment (CDE) and connected systems.",
+    "official_reference": "https://www.pcisecuritystandards.org/document_library/"
+  },
+  "rules": [
+    {
+      "id": "PCI-REQ-1",
+      "title": "Install and maintain network security controls",
+      "description": "Network security controls (NSCs) — firewalls, routers, and equivalent technologies — must be installed and configured to protect the cardholder data environment (CDE). All traffic into and out of the CDE must be restricted to only what is necessary, and all other traffic must be explicitly denied.",
+      "default_severity": "high",
+      "check_hints": [
+        "Security groups or firewall rules allowing 0.0.0.0/0 (all traffic) ingress to CDE hosts",
+        "No documented network diagram separating the CDE from untrusted networks",
+        "Default 'allow all' policies on internal load balancers or API gateways fronting payment services",
+        "Outbound egress not restricted — CDE hosts can reach arbitrary internet endpoints",
+        "No deny-by-default rule at the end of firewall / NSC rule sets",
+        "Infrastructure-as-Code (Terraform, CloudFormation) NSC rules not reviewed for least-privilege"
+      ],
+      "non_compliant_patterns": [
+        "ingress { from_port = 0, to_port = 65535, cidr_blocks = ['0.0.0.0/0'] }",
+        "SecurityGroup rule: port 3306 open to 0.0.0.0/0 — database exposed to internet",
+        "No egress restrictions on ECS task security group hosting payment processor"
+      ],
+      "remediation_guidance": "Apply least-privilege NSC rules. Use explicit allow-lists for inbound CDE access. Restrict outbound to known egress IPs/domains. Review IaC NSC rules in CI pipelines before deploy.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/#agreed-upon-procedures"
+      ]
+    },
+    {
+      "id": "PCI-REQ-2",
+      "title": "Apply secure configurations to all system components",
+      "description": "Default passwords and security parameters from vendors must be changed before deploying any system component into the CDE. All unnecessary functionality (services, protocols, ports, scripts) must be removed. A configuration management process must track and maintain a secure baseline for all system components.",
+      "default_severity": "high",
+      "check_hints": [
+        "Default vendor credentials used in application config or IaC (admin/admin, root/root, postgres/postgres)",
+        "Unnecessary services or ports enabled on CDE hosts (e.g. FTP, Telnet, SNMPv1/v2)",
+        "Container images running as root user",
+        "Debug mode, developer consoles, or verbose error pages enabled in production configs",
+        "No configuration baseline or drift detection for CDE infrastructure",
+        "Unused software packages or libraries not removed from container/VM images"
+      ],
+      "non_compliant_patterns": [
+        "DB_PASSWORD=postgres in .env or docker-compose.yml",
+        "app.run(debug=True) — Flask debug mode in production",
+        "USER root in Dockerfile — container running as root",
+        "expose: ['22', '3306', '5432'] in docker-compose — unnecessary ports exposed"
+      ],
+      "remediation_guidance": "Rotate all default credentials. Use secrets managers. Enforce non-root containers. Disable debug modes in production environments via environment-variable guards. Implement CIS Benchmarks for all OS and container base images.",
+      "references": [
+        "https://www.cisecurity.org/cis-benchmarks"
+      ]
+    },
+    {
+      "id": "PCI-REQ-3",
+      "title": "Protect stored account data",
+      "description": "Sensitive authentication data (SAD) — full magnetic stripe, CVV/CVC, and PINs — must NEVER be stored after authorisation, even if encrypted. Primary Account Numbers (PAN) must be rendered unreadable (e.g. via strong one-way hashing, truncation, tokenisation, or encryption) wherever stored.",
+      "default_severity": "high",
+      "check_hints": [
+        "Full PAN stored in plaintext in a database column, log file, or flat file",
+        "CVV2/CVC2/CID stored in any form after the authorisation transaction completes",
+        "Full magnetic stripe data persisted in any datastore",
+        "PAN present in application logs, error messages, or analytics events",
+        "PAN encrypted but encryption key stored in the same database or on the same host",
+        "Tokenisation implemented but raw PAN retained in a secondary table",
+        "PANs present in URLs, query parameters, or HTTP GET request logs"
+      ],
+      "non_compliant_patterns": [
+        "INSERT INTO payments (card_number, cvv, expiry) VALUES (?, ?, ?) — storing raw card data",
+        "logger.info(f'Payment attempt for card: {card_number}') — PAN in logs",
+        "SELECT card_number FROM transactions — PAN retrieved and returned to application layer",
+        "Storing card_number as VARCHAR(16) without masking or tokenisation"
+      ],
+      "remediation_guidance": "Never store SAD post-authorisation. Use a PCI-compliant tokenisation vault (e.g. Stripe, Braintree). If PAN must be stored, apply AES-256 encryption with keys held in an HSM or separate key management service. Mask PAN in all display/log contexts (show only last 4 digits).",
+      "references": [
+        "https://www.pcisecuritystandards.org/pdfs/pci_fs_data_storage.pdf"
+      ]
+    },
+    {
+      "id": "PCI-REQ-4",
+      "title": "Protect cardholder data with strong cryptography during transmission",
+      "description": "Strong cryptography must be used to safeguard PAN during transmission over open, public networks. Only trusted keys and certificates must be used. Sending unprotected PANs via end-user messaging technologies (email, chat, SMS) is prohibited.",
+      "default_severity": "high",
+      "check_hints": [
+        "HTTP (not HTTPS) used for any endpoint that transmits or receives cardholder data",
+        "TLS versions below 1.2 accepted (TLS 1.0, TLS 1.1, SSL 2.0/3.0)",
+        "Certificate validation disabled in HTTP client configuration",
+        "Weak cipher suites allowed: RC4, DES, 3DES, NULL ciphers, export-grade ciphers",
+        "PAN transmitted via email, SMS, or unencrypted messaging APIs",
+        "Internal service-to-service calls within the CDE made over plain HTTP",
+        "Webhook payloads containing PAN sent to external endpoints over HTTP"
+      ],
+      "non_compliant_patterns": [
+        "requests.get('http://payment-processor/charge', data={'pan': pan}) — HTTP not HTTPS",
+        "ssl_context.check_hostname = False; ssl_context.verify_mode = CERT_NONE",
+        "TLSv1 or SSLv3 listed in supported protocols",
+        "smtplib.sendmail(to, subject, f'Card: {pan}') — PAN in email"
+      ],
+      "remediation_guidance": "Enforce HTTPS with TLS 1.2+ on all endpoints. Disable TLS 1.0/1.1 and SSL. Use strong cipher suites (AES-GCM, ChaCha20). Never send PAN via email/SMS — use tokenised references. Validate certificates in all outbound HTTP clients.",
+      "references": [
+        "https://www.pcisecuritystandards.org/documents/Migrating-from-SSL-Early-TLS-Info-Supp-v1_1.pdf"
+      ]
+    },
+    {
+      "id": "PCI-REQ-5",
+      "title": "Protect all systems and networks from malicious software",
+      "description": "All system components must be protected against malware. Anti-malware solutions must be deployed and kept current on all systems commonly affected by malware. Mechanisms must be in place to detect and address malware, and all anti-malware mechanisms must be actively running and cannot be disabled by users.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Container images or VM AMIs built from unverified base images without malware scanning",
+        "No dependency vulnerability scanning in CI/CD pipeline (e.g. Dependabot, Snyk, Trivy)",
+        "Third-party packages installed without verifying checksums or signatures",
+        "No software composition analysis (SCA) for open-source dependencies",
+        "User-uploaded files processed without malware/content scanning",
+        "Production images not scanned for CVEs before deployment"
+      ],
+      "non_compliant_patterns": [
+        "pip install -r requirements.txt — no hash verification (--require-hashes not set)",
+        "COPY . . in Dockerfile — copying all files including potentially malicious content",
+        "No trivy, grype, or equivalent image scan step in CI/CD pipeline",
+        "npm install with no audit step and audit=false in .npmrc"
+      ],
+      "remediation_guidance": "Add container image scanning (Trivy, Grype) and dependency vulnerability scanning (Snyk, Dependabot) to CI/CD. Use pinned dependency versions with hash verification. Scan user-uploaded files with a content inspection service before processing.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-6",
+      "title": "Develop and maintain secure systems and software",
+      "description": "Security vulnerabilities must be identified and addressed via a patch management process. All software development must follow secure coding guidelines. Web-facing applications must be protected against known attacks (OWASP Top 10). Security testing must be part of the SDLC.",
+      "default_severity": "high",
+      "check_hints": [
+        "SQL queries constructed by string concatenation — SQL injection risk",
+        "User-supplied input rendered directly in HTML — XSS risk",
+        "Insecure deserialisation: pickle.loads(), YAML.load() with user input",
+        "Path traversal: file paths constructed from user input without sanitisation",
+        "SSRF: HTTP requests made to user-supplied URLs without allowlist validation",
+        "No CSRF protection on state-changing endpoints",
+        "Sensitive data (PAN, tokens) exposed in HTTP response headers or error messages",
+        "Outdated frameworks or libraries with known CVEs not patched",
+        "eval(), exec(), or os.system() called with user-controlled input"
+      ],
+      "non_compliant_patterns": [
+        "query = f'SELECT * FROM users WHERE id = {user_id}' — SQL injection",
+        "return render_template_string(user_input) — server-side template injection",
+        "pickle.loads(request.body) — insecure deserialisation",
+        "os.system(f'process {filename}') — command injection via filename",
+        "open(f'uploads/{user_file}') — path traversal vulnerability"
+      ],
+      "remediation_guidance": "Use parameterised queries / ORMs. Encode output in templates. Validate and sanitise all input. Use safe deserialisation libraries. Implement CSP, X-Frame-Options, and CSRF tokens. Integrate SAST (Semgrep, Bandit, CodeQL) in CI/CD gates.",
+      "references": [
+        "https://owasp.org/www-project-top-ten/",
+        "https://owasp.org/www-project-application-security-verification-standard/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-7",
+      "title": "Restrict access to system components and cardholder data by business need to know",
+      "description": "Access to system components and cardholder data must be limited to only those individuals whose job requires such access. Access control systems must be in place to restrict access based on the principle of least privilege.",
+      "default_severity": "high",
+      "check_hints": [
+        "No role-based access control (RBAC) on endpoints that return or process cardholder data",
+        "Database accounts used by applications have DBA-level or root privileges",
+        "All authenticated users have access to payment records regardless of their role",
+        "Overly permissive IAM policies: Action: '*' or Resource: '*' on CDE-related resources",
+        "Shared service accounts used across multiple applications or teams",
+        "No access review process: permissions never revoked for former employees or changed roles"
+      ],
+      "non_compliant_patterns": [
+        "IAM policy: { Effect: Allow, Action: '*', Resource: '*' } — wildcard IAM",
+        "No @require_role('payment_admin') decorator on /admin/payments endpoint",
+        "Database connection string using root or admin user in application code",
+        "All users in 'admin' group by default in user provisioning script"
+      ],
+      "remediation_guidance": "Implement attribute-based or role-based access control at every layer (API, service, database). Use dedicated least-privilege service accounts per application. Apply IAM least-privilege policies. Conduct quarterly access reviews.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-8",
+      "title": "Identify users and authenticate access to system components",
+      "description": "All users must be assigned a unique ID. Strong authentication must be enforced — including multi-factor authentication (MFA) for all access to the CDE and for all remote access. Passwords and authentication credentials must meet minimum strength requirements.",
+      "default_severity": "high",
+      "check_hints": [
+        "No MFA enforced for administrative access to the CDE or cloud console",
+        "Password policy below PCI minimums: < 12 characters, no complexity requirement",
+        "Shared or generic accounts used (admin, service, test) with no individual accountability",
+        "Session tokens with no expiry or excessively long TTL (> 15 minutes for privileged sessions)",
+        "No account lockout policy after repeated failed authentication attempts",
+        "Authentication bypass possible: JWT signature not verified, auth middleware skippable",
+        "Passwords or tokens stored in plaintext in the database"
+      ],
+      "non_compliant_patterns": [
+        "PASSWORD_MIN_LENGTH = 6 — below PCI DSS minimum of 12",
+        "jwt.decode(token, options={'verify_signature': False})",
+        "No lockout after N failed attempts — brute force possible",
+        "session.permanent = True with no expiry set — indefinite session lifetime",
+        "username='admin', password='admin' in test fixtures that reach production"
+      ],
+      "remediation_guidance": "Enforce MFA on all CDE access. Set password minimums to 12+ characters with complexity. Implement account lockout (10 attempts, 30-minute lockout). Set session timeouts (15 minutes idle for privileged). Use bcrypt/Argon2 for password hashing. Always verify JWT signatures.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-9",
+      "title": "Restrict physical access to cardholder data",
+      "description": "Physical access to systems in the cardholder data environment must be restricted and monitored. This includes controls for visitor access, media handling, point-of-interaction (POI) device protection, and secure disposal of media containing cardholder data.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Cloud storage buckets or object stores containing cardholder data are publicly accessible",
+        "Backup files containing PAN stored in unencrypted form on accessible media",
+        "No lifecycle policy to securely delete or archive media containing cardholder data",
+        "S3 bucket, Azure Blob, or GCS bucket with cardholder data has public-read ACL",
+        "Cardholder data exported to developer laptops or local environments",
+        "Database dumps or backups emailed or shared via collaboration tools"
+      ],
+      "non_compliant_patterns": [
+        "aws_s3_bucket_acl: public-read on bucket storing payment records",
+        "aws_s3_bucket: block_public_acls = false, block_public_policy = false",
+        "No server_side_encryption_configuration on S3 bucket with cardholder data",
+        "Backup retention policy missing or set to 'never delete'"
+      ],
+      "remediation_guidance": "Block all public access on storage buckets containing CHD. Enforce server-side encryption on all CHD storage. Implement lifecycle policies for secure deletion. Restrict export of CHD to production environments only.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-10",
+      "title": "Log and monitor all access to system components and cardholder data",
+      "description": "Audit logs must capture all access to system components and cardholder data, all actions taken by individuals with root/administrative privileges, access to audit trails, and all invalid logical access attempts. Logs must be retained for at least 12 months (3 months immediately available) and protected from modification.",
+      "default_severity": "high",
+      "check_hints": [
+        "No audit logging on read or write operations involving cardholder data tables",
+        "Audit log entries missing required fields: user/service identity, timestamp, source IP, action, outcome",
+        "Logs stored in the same system as the data they audit — not tamper-evident",
+        "Log retention shorter than 12 months, or logs not centralised to an immutable store",
+        "Failed authentication attempts not logged or not alerted on",
+        "Database query logs (slow query, general log) disabled on CDE databases",
+        "No alerting on anomalous access patterns (bulk reads, off-hours access) to CHD"
+      ],
+      "non_compliant_patterns": [
+        "No audit_log table or audit trail in the database schema for payment records",
+        "Log entries written to local disk only — no shipping to centralised SIEM",
+        "try/except that swallows authentication exceptions without logging the failure",
+        "SELECT * FROM audit_log DELETE allowed — audit logs mutable by application"
+      ],
+      "remediation_guidance": "Implement structured audit logging for all CHD access with: timestamp, user_id, source_ip, action, resource, outcome. Ship logs to an immutable centralised store (CloudWatch Logs, Splunk, Datadog). Set 12-month retention. Alert on bulk reads, failed logins, and off-hours access.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-11",
+      "title": "Test security of systems and networks regularly",
+      "description": "Security controls must be tested regularly to ensure they continue to operate effectively. This includes vulnerability scanning (internal and external, quarterly), penetration testing (annual and after significant changes), intrusion detection/prevention systems, and change-detection mechanisms for critical files.",
+      "default_severity": "medium",
+      "check_hints": [
+        "No SAST or DAST tooling integrated in the CI/CD pipeline for CDE-adjacent code",
+        "No dependency vulnerability scanning — outdated packages with known CVEs",
+        "Container images deployed to production without vulnerability scanning",
+        "No penetration test scheduled or results documented for the current year",
+        "No intrusion detection system (IDS/IPS) or WAF in front of the CDE",
+        "File integrity monitoring (FIM) absent for critical system files and configuration",
+        "Security scan results not reviewed or tracked to closure"
+      ],
+      "non_compliant_patterns": [
+        "No security scanning step in .github/workflows/ci.yml for payment service",
+        "Docker image deployed with critical CVEs unpatched (as reported by Trivy/Grype)",
+        "No WAF configuration or rate limiting on payment API endpoints",
+        "requirements.txt or package.json with packages having known critical CVEs"
+      ],
+      "remediation_guidance": "Integrate SAST (Semgrep, CodeQL, Bandit) and SCA (Snyk, Dependabot) in CI gates. Add container image scanning. Deploy a WAF on all public-facing CDE endpoints. Schedule annual pen tests and quarterly vulnerability scans. Track all findings to remediation.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/",
+        "https://owasp.org/www-project-devsecops-guideline/"
+      ]
+    },
+    {
+      "id": "PCI-REQ-12",
+      "title": "Support information security with organisational policies and programs",
+      "description": "An information security policy must be established, published, maintained, and disseminated to all relevant personnel and contractors. The policy must address all PCI DSS requirements. A risk assessment process must be maintained, and a security awareness program implemented.",
+      "default_severity": "low",
+      "check_hints": [
+        "No SECURITY.md or security policy file in the repository",
+        "No CODEOWNERS or mandatory security review gate for changes to payment-related code",
+        "Incident response plan not referenced or linked from the service's runbook",
+        "No responsible disclosure / vulnerability reporting mechanism",
+        "Third-party vendor risk not assessed: payment processors, cloud providers not reviewed",
+        "No documented data flow diagram or architecture diagram for the CDE in the repo",
+        "Service does not declare its PCI DSS scope (in-scope / out-of-scope) in documentation"
+      ],
+      "non_compliant_patterns": [
+        "No CODEOWNERS file requiring security team review on /payments directory changes",
+        "No SECURITY.md describing vulnerability disclosure process",
+        "No incident response runbook linked from service README",
+        "Third-party payment SDK version pinned to wildcard: stripe>=2.0.0 — no exact pin"
+      ],
+      "remediation_guidance": "Add SECURITY.md with a vulnerability disclosure policy. Add CODEOWNERS rules for payment-related paths. Link incident response runbook from service README. Pin all third-party dependency versions exactly. Document CDE scope and data flow in the repository.",
+      "references": [
+        "https://www.pcisecuritystandards.org/document_library/",
+        "https://securitytxt.org/"
+      ]
+    }
+  ]
+}
