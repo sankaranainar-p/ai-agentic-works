@@ -1,0 +1,68 @@
+{
+  "checks": [
+    {
+      "name": "checkout_500_error_rate",
+      "source": "prometheus",
+      "alert_text": "HTTP 500 error rate 8% on /api/checkout — above 5% threshold",
+      "threshold": 0.05,
+      "simulated_value": 0.0,
+      "interval_seconds": 30
+    },
+    {
+      "name": "ddos_request_flood",
+      "source": "waf",
+      "alert_text": "WAF triggered: requests/min spike 450k — possible botnet flood",
+      "threshold": 100000,
+      "simulated_value": 0,
+      "interval_seconds": 15
+    },
+    {
+      "name": "payment_availability",
+      "source": "healthcheck",
+      "alert_text": "Payment service availability dropped to 98.5% — below 99.9% SLA threshold",
+      "threshold": 99.9,
+      "simulated_value": 0,
+      "interval_seconds": 20
+    },
+    {
+      "name": "checkout_p99_latency_ms",
+      "source": "prometheus",
+      "alert_text": "p99 latency 4800ms on payment processing API — above 2000ms threshold",
+      "threshold": 2000,
+      "simulated_value": 0,
+      "interval_seconds": 30
+    },
+    {
+      "name": "db_connection_pool_used_pct",
+      "source": "prometheus",
+      "alert_text": "PostgreSQL connection pool at 95% capacity — max_connections approaching",
+      "threshold": 90,
+      "simulated_value": 0,
+      "interval_seconds": 30
+    },
+    {
+      "name": "auth_failure_rate",
+      "source": "prometheus",
+      "alert_text": "OAuth token validation failure rate 12% — identity provider degraded",
+      "threshold": 0.05,
+      "simulated_value": 0.0,
+      "interval_seconds": 30
+    },
+    {
+      "name": "network_packet_loss_pct",
+      "source": "prometheus",
+      "alert_text": "Packet loss 18% between payment service and database — network degraded",
+      "threshold": 5,
+      "simulated_value": 0,
+      "interval_seconds": 20
+    },
+    {
+      "name": "kafka_consumer_lag",
+      "source": "kafka",
+      "alert_text": "Kafka consumer lag 750k messages on payment-events topic — pipeline stalled",
+      "threshold": 100000,
+      "simulated_value": 0,
+      "interval_seconds": 30
+    }
+  ]
+}
