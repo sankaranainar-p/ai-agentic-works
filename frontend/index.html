@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LexiQ — Research Intelligence Platform</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sb:#0A0A0A;--sb-t:#555;--sb-ta:#FFF;--sb-ab:#181818;--sb-acc:#3B82F6;--sb-w:228px;
+  --tb-h:50px;--bg:#F4F4F4;--card:#FFF;--b:#E3E3E3;--bs:#C8C8C8;
+  --t1:#0D0D0D;--t2:#5C5C5C;--t3:#9A9A9A;
+  --blue:#2563EB;--blue-bg:#EFF6FF;--blue-t:#1D4ED8;
+  --green:#15803D;--green-bg:#F0FDF4;
+  --red:#B91C1C;--red-bg:#FEF2F2;
+  --amber:#92400E;--amber-bg:#FFFBEB;
+  --mono:"SFMono-Regular","JetBrains Mono",Consolas,monospace;
+  --sans:"Inter",-apple-system,system-ui,sans-serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--t1);line-height:1.5;-webkit-font-smoothing:antialiased;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ─── topbar ─────────────────────────────── */
+.topbar{height:var(--tb-h);background:#fff;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 0;flex-shrink:0;z-index:10}
+.tb-left{display:flex;align-items:center;gap:0;height:100%}
+.tb-brand{display:flex;align-items:center;gap:10px;padding:0 20px;height:100%;border-right:1px solid var(--b)}
+.tb-brand-name{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--t1)}
+.tb-brand-dot{width:6px;height:6px;background:var(--blue);border-radius:50%;flex-shrink:0}
+.tb-session{padding:0 20px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+.tb-session b{color:var(--t2)}
+.tb-right{display:flex;align-items:center;gap:14px}
+.status-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot.ok{background:#22C55E}.dot.warn{background:#F59E0B}.dot.err{background:#EF4444}
+.tb-mode{font-family:var(--mono);font-size:10px;background:var(--blue-bg);color:var(--blue-t);border:1px solid #BFDBFE;border-radius:4px;padding:3px 8px;letter-spacing:.04em}
+
+/* ─── workspace ──────────────────────────── */
+.workspace{display:flex;flex:1;overflow:hidden}
+
+/* ─── sidebar ────────────────────────────── */
+.sidebar{width:var(--sb-w);background:var(--sb);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-head{padding:20px 16px 14px;border-bottom:1px solid #1A1A1A}
+.sb-logo{font-size:17px;font-weight:700;color:#FFF;letter-spacing:-.02em}
+.sb-sub{font-family:var(--mono);font-size:10px;color:#3A3A3A;margin-top:4px;letter-spacing:.06em;text-transform:uppercase}
+.sb-nav{padding:10px 0;flex:1}
+.sb-group{padding:6px 0}
+.sb-divider{height:1px;background:#1A1A1A;margin:4px 12px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-left:2px solid transparent;transition:background .1s,color .1s}
+.sb-item:hover{background:#141414}
+.sb-item.active{background:var(--sb-ab);border-left-color:var(--sb-acc);color:#FFF}
+.sb-item.active .sb-lbl{color:#FFF}
+.sb-lbl{font-size:13px;color:var(--sb-t);flex:1;transition:color .1s}
+.sb-badge{font-family:var(--mono);font-size:9px;background:#1E3A5F;color:#93C5FD;padding:2px 6px;border-radius:3px;letter-spacing:.06em}
+.sb-foot{padding:14px 16px;border-top:1px solid #1A1A1A}
+.sb-foot-stat{font-family:var(--mono);font-size:10px;color:#2D2D2D;line-height:1.8}
+
+/* ─── main content ───────────────────────── */
+.main{flex:1;overflow-y:auto;padding:28px 32px}
+.panel{display:none}
+.panel.active{display:block;animation:fin .2s ease}
+@keyframes fin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* ─── overview ───────────────────────────── */
+.ov-head{margin-bottom:24px}
+.ov-title{font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--t1)}
+.ov-sub{font-size:13px;color:var(--t2);margin-top:3px}
+.metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.metric{background:var(--card);border:1px solid var(--b);border-radius:10px;padding:16px 18px}
+.metric-val{font-size:26px;font-weight:600;letter-spacing:-.03em;color:var(--t1);line-height:1}
+.metric-lbl{font-size:12px;color:var(--t2);margin-top:5px}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.status-card{background:var(--card);border:1px solid var(--b);border-radius:10px;padding:14px 16px}
+.status-card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:10px;font-family:var(--mono)}
+.status-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:13px}
+.status-row:last-child{border-bottom:none}
+.status-label{color:var(--t2)}
+.status-val{font-family:var(--mono);font-size:11px;display:flex;align-items:center;gap:5px}
+.activity{background:var(--card);border:1px solid var(--b);border-radius:10px;padding:16px 18px}
+.activity-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:10px;font-family:var(--mono)}
+.act-row{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--b);font-size:13px}
+.act-row:last-child{border-bottom:none}
+.act-time{font-family:var(--mono);font-size:11px;color:var(--t3);flex-shrink:0}
+.act-mod{font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0}
+.act-q{color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ─── module panels ──────────────────────── */
+.mod-header{margin-bottom:22px}
+.mod-title{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.mod-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.mbadge{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:.05em}
+.mbadge.flagship{background:#1E3A5F;color:#93C5FD}
+.mbadge.local{background:#14532D;color:#86EFAC}
+.mbadge.multi{background:#3B1A6E;color:#C4B5FD}
+.mbadge.deterministic{background:#451A03;color:#FCD34D}
+.mbadge.audit{background:#1A1A1A;color:#6B6B6B}
+.mod-desc{font-size:13px;color:var(--t2);max-width:68ch;line-height:1.6;margin-top:8px}
+
+.io{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.io{grid-template-columns:1fr}}
+.col-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t3);margin-bottom:7px}
+textarea,input[type=text]{width:100%;padding:12px;border:1px solid var(--b);border-radius:8px;font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--card);color:var(--t1);resize:vertical;min-height:130px}
+textarea:focus,input:focus{outline:2px solid var(--blue);border-color:transparent}
+.controls{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+button.run{background:var(--t1);color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--sans);letter-spacing:.01em}
+button.run:hover{background:#222}
+button.ghost{background:none;border:1px solid var(--b);color:var(--t2);border-radius:7px;padding:9px 14px;cursor:pointer;font-size:12px;transition:border-color .15s}
+button.ghost:hover{border-color:var(--bs)}
+
+.out-wrap{position:relative}
+.output{background:var(--card);border:1px solid var(--b);border-radius:8px;min-height:180px;overflow:hidden}
+.out-body{padding:16px}
+.placeholder{color:var(--t3);font-size:13px;font-style:italic}
+
+/* telemetry strip — the signature element */
+.telemetry{background:#F8F8F8;border-top:1px solid var(--b);padding:8px 14px;display:flex;align-items:center;gap:0;font-family:var(--mono);font-size:11px;color:var(--t3);flex-wrap:wrap;gap:6px}
+.t-ok{color:#22C55E;font-size:8px}
+.t-sep{color:var(--b);padding:0 2px}
+.t-session{color:var(--blue);opacity:.6}
+.t-lbl{text-transform:uppercase;letter-spacing:.08em;font-size:9px;color:var(--t3)}
+
+/* ─── grounded ───────────────────────────── */
+.g-answer{font-size:15px;line-height:1.75;color:var(--t1)}
+.stag{font-family:var(--mono);font-size:10px;background:var(--t1);color:#fff;padding:1px 5px;border-radius:3px;cursor:pointer;vertical-align:middle;margin:0 2px;letter-spacing:.04em}
+.ev-list{margin-top:14px;border-top:1px solid var(--b);padding-top:12px}
+.ev-lbl{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:8px}
+.ev-card{border:1px solid var(--b);border-left:3px solid var(--blue);border-radius:0 7px 7px 0;padding:10px 12px;margin-bottom:8px;background:#FAFAFA}
+.ev-card.web{border-left-color:#7C3AED;background:#FAF5FF}
+.ev-meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--blue);margin-bottom:5px}
+.ev-card.web .ev-meta{color:#7C3AED}
+.ev-text{font-size:12px;color:#3C3C3C;line-height:1.55}
+.ev-origin{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;padding:1px 5px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.ev-origin.LOCAL{background:#DBEAFE;color:#1D4ED8}
+.ev-origin.WEB{background:#EDE9FE;color:#6D28D9}
+.web-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;margin-top:8px;user-select:none}
+.web-toggle input{cursor:pointer;accent-color:#7C3AED}
+.web-toggle-lbl{display:flex;flex-direction:column;gap:1px}
+.web-toggle-lbl small{font-size:10px;color:var(--t3)}
+
+/* ─── divergence ─────────────────────────── */
+.consensus-row{display:flex;gap:10px;margin-bottom:14px}
+.ctile{flex:1;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid transparent}
+.ctile.S{background:var(--green-bg);border-color:#BBF7D0}.ctile.C{background:var(--red-bg);border-color:#FECACA}.ctile.Q{background:var(--amber-bg);border-color:#FDE68A}
+.ctile-n{font-size:24px;font-weight:600;line-height:1}
+.ctile.S .ctile-n{color:var(--green)}.ctile.C .ctile-n{color:var(--red)}.ctile.Q .ctile-n{color:var(--amber)}
+.ctile-l{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;margin-top:3px;color:var(--t3)}
+.stance-row{display:grid;grid-template-columns:108px 1fr;gap:12px;border:1px solid var(--b);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.stance{font-family:var(--mono);font-size:9px;font-weight:700;text-align:center;padding:5px 4px;border-radius:5px;letter-spacing:.06em}
+.stance.SUPPORTS{background:var(--green-bg);color:var(--green)}
+.stance.CONTRADICTS{background:var(--red-bg);color:var(--red)}
+.stance.QUALIFIES{background:var(--amber-bg);color:var(--amber)}
+.stance.UNRELATED{background:#F5F5F5;color:var(--t3)}
+.st-src{font-family:var(--mono);font-size:10px;color:var(--blue);margin-bottom:3px}
+.st-ev{font-size:13px;color:var(--t2)}
+
+/* ─── analysis ───────────────────────────── */
+.field{margin-bottom:12px}
+.field-k{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--blue);margin-bottom:4px;font-weight:600}
+.field-v{font-size:13px;color:var(--t1)}
+.field ul{padding-left:16px;margin-top:2px}.field li{margin-bottom:2px;font-size:13px}
+.gap-tag{display:inline-block;background:var(--blue-bg);color:var(--blue-t);border-radius:5px;padding:3px 9px;margin:2px 3px 0 0;font-size:12px;font-weight:500}
+
+/* ─── vectors ────────────────────────────── */
+.idea{border:1px solid var(--b);border-radius:9px;padding:14px 16px;margin-bottom:10px;background:var(--card)}
+.idea-title{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:3px}
+.idea-q{font-size:13px;color:var(--t2);margin-bottom:10px}
+.idea-scores{display:flex;gap:20px}
+.score-item{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.bar{height:4px;background:#EBEBEB;border-radius:2px;width:72px;margin-top:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:2px}
+.idea-rat{font-size:12px;color:var(--t3);margin-top:8px;padding-top:8px;border-top:1px solid var(--b)}
+
+/* ─── synthesis ──────────────────────────── */
+.draft-text{font-size:15px;line-height:1.75;color:var(--t1)}
+.cite-mark{font-family:var(--mono);font-size:10px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;padding:1px 5px;border-radius:3px;margin:0 2px}
+.draft-note{background:var(--amber-bg);border:1px solid #FDE68A;border-radius:7px;padding:9px 12px;margin-top:12px;font-size:12px;color:var(--amber)}
+
+/* ─── integrity ──────────────────────────── */
+.int-summary{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.int-tile{background:var(--card);border:1px solid var(--b);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;display:flex;align-items:center;gap:7px}
+.int-tile.ok{border-color:#BBF7D0;color:var(--green)}.int-tile.warn{border-color:#FDE68A;color:var(--amber)}.int-tile.err{border-color:#FECACA;color:var(--red)}
+.cite-card{border:1px solid var(--b);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--card);display:grid;grid-template-columns:80px 1fr;gap:12px}
+.v-badge{font-family:var(--mono);font-size:9px;font-weight:700;text-align:center;padding:5px 4px;border-radius:5px;letter-spacing:.04em}
+.v-badge.VERIFIED{background:var(--green-bg);color:var(--green)}
+.v-badge.UNRESOLVED{background:var(--red-bg);color:var(--red)}
+.v-badge.MISATTRIBUTED{background:var(--amber-bg);color:var(--amber)}
+.cite-claimed{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px}
+.cite-detail{font-size:12px;color:var(--t2)}
+.cite-doi{font-family:var(--mono);font-size:11px;color:var(--blue);margin-top:4px}
+.num-flag{background:var(--red-bg);border:1px solid #FECACA;border-radius:7px;padding:10px 12px;margin-top:8px}
+.num-flag-h{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.num-flag-d{font-size:12px;color:var(--t2)}
+.num-flag-f{font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:3px}
+
+/* ─── audit ──────────────────────────────── */
+.audit-table{width:100%;border-collapse:collapse}
+.audit-table th{text-align:left;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--b);font-weight:600}
+.audit-table td{padding:9px 10px;border-bottom:1px solid #F2F2F2;font-size:12px;font-family:var(--mono)}
+.audit-table td.mod{color:var(--blue)}.audit-table td.hash{color:var(--t3);font-size:10px}
+.audit-table td.ts{color:var(--t2)}.audit-table td.model{color:var(--t1)}
+.export-row{display:flex;justify-content:flex-end;margin-top:12px}
+</style>
+</head>
+<body>
+
+<!-- ═══ TOPBAR ═══════════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="tb-left">
+    <div class="tb-brand">
+      <div class="tb-brand-dot"></div>
+      <div class="tb-brand-name">LexiQ</div>
+    </div>
+    <div class="tb-session">
+      session&nbsp;<b>lxq_4a91d8c7</b>&nbsp;·&nbsp;started 09:12:03 UTC
+    </div>
+  </div>
+  <div class="tb-right">
+    <div class="status-pill"><div class="dot ok"></div>Ollama</div>
+    <div class="status-pill"><div class="dot ok"></div>llama3.1:latest</div>
+    <div class="status-pill"><div class="dot ok"></div>embed:llama3.1</div>
+    <div class="status-pill"><div class="dot ok"></div>CrossRef</div>
+    <div class="tb-mode">LOCAL&nbsp;INFERENCE</div>
+  </div>
+</div>
+
+<!-- ═══ WORKSPACE ════════════════════════════════════════════════════════ -->
+<div class="workspace">
+
+  <!-- ─── SIDEBAR ─────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sb-head">
+      <div class="sb-logo">LexiQ</div>
+      <div class="sb-sub">Research Intelligence</div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-group">
+        <div class="sb-item active" data-p="overview"><span class="sb-lbl">Session Overview</span></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-group">
+        <div class="sb-item" data-p="grounded"><span class="sb-lbl">Grounded Query</span><span class="sb-badge">FLAGSHIP</span></div>
+        <div class="sb-item" data-p="divergence"><span class="sb-lbl">Evidence Divergence</span></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-group">
+        <div class="sb-item" data-p="analysis"><span class="sb-lbl">Document Analysis</span></div>
+        <div class="sb-item" data-p="vectors"><span class="sb-lbl">Research Vectors</span></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-group">
+        <div class="sb-item" data-p="synthesis"><span class="sb-lbl">Synthesis</span></div>
+        <div class="sb-item" data-p="integrity"><span class="sb-lbl">Reference Integrity</span></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-group">
+        <div class="sb-item" data-p="citations"><span class="sb-lbl">Citation Trail</span><span class="sb-badge">NEW</span></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-group">
+        <div class="sb-item" data-p="audit"><span class="sb-lbl">Audit Ledger</span></div>
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="sb-foot-stat">6 documents · 248 chunks<br>8.4 MB indexed · local embed</div>
+    </div>
+  </nav>
+
+  <!-- ─── MAIN ─────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- ══ 0. OVERVIEW ═══════════════════════════════════════════ -->
+    <div class="panel active" id="p-overview">
+      <div class="ov-head">
+        <div class="ov-title">Session Overview</div>
+        <div class="ov-sub">lxq_4a91d8c7 · Live mode · LLM agent security corpus</div>
+      </div>
+      <div class="metric-row">
+        <div class="metric"><div class="metric-val">6</div><div class="metric-lbl">Indexed documents</div></div>
+        <div class="metric"><div class="metric-val">248</div><div class="metric-lbl">Embedding chunks</div></div>
+        <div class="metric"><div class="metric-val">3</div><div class="metric-lbl">Session queries</div></div>
+        <div class="metric"><div class="metric-val">7</div><div class="metric-lbl">Verifications run</div></div>
+      </div>
+      <div class="status-grid">
+        <div class="status-card">
+          <div class="status-card-title">System Health</div>
+          <div class="status-row"><span class="status-label">Ollama inference</span><span class="status-val"><div class="dot ok"></div>ONLINE · localhost:11434</span></div>
+          <div class="status-row"><span class="status-label">llama3.1:latest</span><span class="status-val"><div class="dot ok"></div>LOADED · generation + embed</span></div>
+          <div class="status-row"><span class="status-label">Semantic Scholar</span><span class="status-val"><div class="dot ok"></div>PUBLIC API · no key required</span></div>
+          <div class="status-row"><span class="status-label">CrossRef API</span><span class="status-val"><div class="dot ok"></div>REACHABLE · 142ms</span></div>
+        </div>
+        <div class="status-card">
+          <div class="status-card-title">Pipeline Configuration</div>
+          <div class="status-row"><span class="status-label">Chunk size</span><span class="status-val">900 chars · 150 overlap</span></div>
+          <div class="status-row"><span class="status-label">Retrieval k</span><span class="status-val">4 passages (grounded) · 6 (divergence)</span></div>
+          <div class="status-row"><span class="status-label">Similarity threshold</span><span class="status-val">cosine ≥ 0.60</span></div>
+          <div class="status-row"><span class="status-label">Verification layers</span><span class="status-val">existence · attribution · arithmetic</span></div>
+        </div>
+      </div>
+      <div class="activity">
+        <div class="activity-title">Recent Session Activity</div>
+        <div class="act-row"><span class="act-time">09:14:02</span><span class="act-mod">grounded_query</span><span class="act-q">"Does jurisdiction-aware aggregation improve recall under a fixed privacy budget?"</span></div>
+        <div class="act-row"><span class="act-time">09:15:41</span><span class="act-mod">evidence_divergence</span><span class="act-q">"Differential privacy preserves model utility in federated fraud detection"</span></div>
+        <div class="act-row"><span class="act-time">09:17:08</span><span class="act-mod">reference_integrity</span><span class="act-q">Verification run on Synthesis output — 3 citations, 1 numeric anomaly detected</span></div>
+      </div>
+    </div>
+
+    <!-- ══ 1. GROUNDED QUERY ══════════════════════════════════════ -->
+    <div class="panel" id="p-grounded">
+      <div class="mod-header">
+        <div class="mod-title">Grounded Query</div>
+        <div class="mod-badges">
+          <span class="mbadge flagship">FLAGSHIP</span>
+          <span class="mbadge local">LOCAL EMBED</span>
+        </div>
+        <div class="mod-desc">Every sentence in the response carries a source tag resolved to an exact passage, document, and page number. This is sourced text, not plausible text — the fundamental distinction from a chat window, which has no corpus and no provenance.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Query</div>
+          <textarea id="g-in"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('grounded')">Execute query</button>
+            <button class="ghost" onclick="load('g-in',S.grounded)">Load sample</button>
+            <label class="web-toggle">
+              <input type="checkbox" id="g-web-enrich">
+              <div class="web-toggle-lbl">
+                <span>Enrich with internet</span>
+                <small>Semantic Scholar · real-time · abstracts only</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Grounded response + evidence</div>
+          <div class="out-wrap">
+            <div class="output" id="g-out">
+              <div class="out-body"><span class="placeholder">Response with source attribution appears here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 2. EVIDENCE DIVERGENCE ═════════════════════════════════ -->
+    <div class="panel" id="p-divergence">
+      <div class="mod-header">
+        <div class="mod-title">Evidence Divergence</div>
+        <div class="mbadge multi" style="display:inline-block;margin-top:8px">MULTI-DOCUMENT</div>
+        <div class="mod-desc">Classify a claim across the full corpus. Each retrieved passage is assessed as SUPPORTS, CONTRADICTS, QUALIFIES, or UNRELATED — with evidence. Surfacing disagreement between papers is the synthesis work a chat window structurally cannot do.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Claim under examination</div>
+          <textarea id="d-in"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('divergence')">Map evidence</button>
+            <button class="ghost" onclick="load('d-in',S.divergence)">Load sample</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Consensus distribution + per-source stances</div>
+          <div class="out-wrap">
+            <div class="output" id="d-out">
+              <div class="out-body"><span class="placeholder">Divergence map appears here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 3. DOCUMENT ANALYSIS ═══════════════════════════════════ -->
+    <div class="panel" id="p-analysis">
+      <div class="mod-header">
+        <div class="mod-title">Document Analysis</div>
+        <div class="mod-desc">Extract structured signal from a paper — problem framing, methodology, findings, limitations, and candidate research vectors — in a comparable, queryable format.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Source text</div>
+          <textarea id="a-in" style="min-height:200px"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('analysis')">Analyse</button>
+            <button class="ghost" onclick="load('a-in',S.analysis)">Load sample</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Structured extraction</div>
+          <div class="out-wrap">
+            <div class="output" id="a-out">
+              <div class="out-body"><span class="placeholder">Structured extraction appears here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 4. RESEARCH VECTORS ════════════════════════════════════ -->
+    <div class="panel" id="p-vectors">
+      <div class="mod-header">
+        <div class="mod-title">Research Vectors</div>
+        <div class="mod-desc">From a research context or extracted gaps, generate candidate directions scored on novelty and feasibility. Prioritise rather than brainstorm blindly.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Research context</div>
+          <textarea id="v-in" style="min-height:200px"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('vectors')">Generate vectors</button>
+            <button class="ghost" onclick="load('v-in',S.vectors)">Load sample</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Scored directions</div>
+          <div class="out-wrap">
+            <div class="output" id="v-out">
+              <div class="out-body"><span class="placeholder">Research vectors appear here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 5. SYNTHESIS ═══════════════════════════════════════════ -->
+    <div class="panel" id="p-synthesis">
+      <div class="mod-header">
+        <div class="mod-title">Synthesis</div>
+        <div class="mod-desc">Generate a structured draft paragraph. Every reference is emitted as a <span style="font-family:var(--mono);font-size:12px">[CITE: …]</span> marker — explicitly unverified until processed by the Reference Integrity layer. The draft is a starting artifact, not a finished output.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Topic / research notes</div>
+          <textarea id="s-in" style="min-height:200px"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('synthesis')">Generate draft</button>
+            <button class="ghost" onclick="load('s-in',S.synthesis)">Load sample</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Draft output — citations unverified</div>
+          <div class="out-wrap">
+            <div class="output" id="s-out">
+              <div class="out-body"><span class="placeholder">Draft appears here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 6. REFERENCE INTEGRITY ═════════════════════════════════ -->
+    <div class="panel" id="p-integrity">
+      <div class="mod-header">
+        <div class="mod-title">Reference Integrity</div>
+        <div class="mbadge deterministic" style="display:inline-block;margin-top:8px">THREE-LAYER DETERMINISTIC</div>
+        <div class="mod-desc">Three verification passes the LLM cannot perform on its own — existence (CrossRef lookup), attribution (real DOI metadata vs claimed detail), and arithmetic (numeric consistency). Computational checks over a generative output.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Input — text with [CITE: …] markers</div>
+          <textarea id="i-in" style="min-height:200px"></textarea>
+          <div class="controls">
+            <button class="run" onclick="run('integrity')">Run integrity check</button>
+            <button class="ghost" onclick="load('i-in',S.integrity)">Load sample</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Integrity report</div>
+          <div class="out-wrap">
+            <div class="output" id="i-out">
+              <div class="out-body"><span class="placeholder">Integrity report appears here.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 7. AUDIT LEDGER ════════════════════════════════════════ -->
+    <div class="panel" id="p-audit">
+      <div class="mod-header">
+        <div class="mod-title">Audit Ledger</div>
+        <div class="mbadge audit" style="display:inline-block;margin-top:8px">REPRODUCIBILITY</div>
+        <div class="mod-desc">Every generative operation writes an append-only entry: model version, temperature, prompt hash, and a SHA-256 of the output. Reproducibility, in the language researchers and institutions already require.</div>
+      </div>
+      <div class="output" style="min-height:auto">
+        <div class="out-body">
+          <table class="audit-table">
+            <thead><tr><th>Timestamp (UTC)</th><th>Module</th><th>Model</th><th>Temp</th><th>Prompt SHA</th><th>Output SHA-256</th></tr></thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="export-row">
+        <button class="ghost" onclick="exportAudit()">Export JSONL</button>
+      </div>
+    </div>
+
+    <!-- ══ 7. CITATION TRAIL ════════════════════════════════════════ -->
+    <div class="panel" id="p-citations">
+      <div class="mod-header">
+        <div class="mod-title">Citation Trail</div>
+        <div class="mod-badges">
+          <span class="mbadge multi">SEMANTIC SCHOLAR</span>
+          <span class="mbadge deterministic">CROSSREF</span>
+        </div>
+        <div class="mod-desc">Extract the reference list from an ingested PDF and validate each citation against Semantic Scholar and CrossRef. Status badges show whether each reference resolves to a real paper in the scholarly index.</div>
+      </div>
+      <div class="io">
+        <div>
+          <div class="col-label">Source document</div>
+          <select id="ct-pdf" style="width:100%;padding:10px;border:1px solid var(--b);border-radius:8px;font-family:var(--mono);font-size:12px;background:var(--card);color:var(--t1)"><option value="">Loading…</option></select>
+          <div class="controls" style="margin-top:10px">
+            <button class="run" onclick="runCitations()">Run Citation Trail</button>
+          </div>
+        </div>
+        <div>
+          <div class="col-label">Citation trail</div>
+          <div class="out-wrap">
+            <div class="output" id="ct-out">
+              <div class="out-body"><span class="placeholder">Select a document and run to see its citation trail.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /workspace -->
+
+<script>
+const LIVE=true;
+
+const S={
+  grounded:"What attack vectors does the paper identify for web-capable LLM agents, and how does the defense framework address prompt injection?",
+  divergence:"Web-capable LLM agents are vulnerable to indirect prompt injection attacks via malicious web content.",
+  analysis:"We present a threat model, attack taxonomy, and defense framework for web-capable LLM agents. Our taxonomy classifies attacks across seven dimensions including injection source, attacker goal, and required access level. We demonstrate that existing defenses are insufficient against multi-step indirect prompt injection chains and propose a layered mitigation strategy combining input sanitisation, privilege separation, and output monitoring.",
+  vectors:"Research interest: security of web-capable LLM agents. Known gaps: multi-step attack chains are poorly understood, existing defenses do not compose well, and there is no standardised evaluation benchmark for LLM agent security.",
+  synthesis:"Topic: why privilege separation is a necessary but not sufficient defense against indirect prompt injection in web-capable LLM agents, and what the current defense framework leaves unresolved.",
+  integrity:`Web-capable LLM agents face novel prompt injection risks not present in static deployments [CITE: Greshake et al., 2023, Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection]. Sandboxing techniques offer partial mitigation [CITE: Anthropic, 2024, Constitutional AI: Harmlessness from AI Feedback]. Some authors claim the attack surface is fully enumerated [CITE: Smith & Jones, 2024, Complete Survey of LLM Security Attacks]. In the evaluated threat model, 85%, 90%, and 45% of attack chains were blocked by each defense layer respectively.`
+};
+
+const CANNED={
+  grounded:{
+    answer:`Jurisdiction-aware aggregation yielded a 4.1% recall improvement at a fixed privacy budget (ε=2.0) relative to FedAvg on the synthetic SCBP-2024 dataset [S:a17f3c92]. However, the gain was not universal — two surveyed studies reported recall losses of 8 to 12 percent under comparable privacy parameters [S:c4e1b8a0]. The primary authors explicitly caution that results are anchored to synthetic transaction data and may not transfer to live payment networks [S:a17f3c92]. Long-term production deployment metrics remain largely unreported in the literature [S:f9d2e771].`,
+    passages:[
+      {id:"a17f3c92",source:"zhao_federated_2024.pdf",page:7,score:0.84,text:"Our jurisdiction-aware scheme yields a 4.1% recall improvement at a fixed (ε=2.0) privacy budget over FedAvg, evaluated on the synthetic SCBP-2024 dataset. We caution that these results rest on synthetic data and may not generalise to production environments."},
+      {id:"c4e1b8a0",source:"meyer_privacy_2023.pdf",page:4,score:0.79,text:"Across our experiments, enforcing differential privacy at ε≤2 reduced recall by 8–12% relative to the non-private baseline — a tension we did not fully resolve within this work."},
+      {id:"f9d2e771",source:"okonkwo_survey_2025.pdf",page:11,score:0.71,text:"Few studies report production deployment metrics; most evaluation remains on synthetic or replayed transaction logs, limiting generalisability claims."}
+    ],
+    tele:"4 passages · similarity 0.84 – 0.71 · embed 312ms · inference 1,247ms"
+  },
+  divergence:{
+    consensus:{SUPPORTS:1,CONTRADICTS:2,QUALIFIES:2},
+    findings:[
+      {source:"zhao_federated_2024.pdf",stance:"SUPPORTS",evidence:"Reports 4.1% recall gain at fixed privacy budget vs FedAvg baseline.",confidence:4},
+      {source:"meyer_privacy_2023.pdf",stance:"CONTRADICTS",evidence:"DP at ε≤2 cut recall by 8–12% — tension not resolved.",confidence:5},
+      {source:"okonkwo_survey_2025.pdf",stance:"CONTRADICTS",evidence:"Survey: recall degradation under DP is the norm, not the exception.",confidence:4},
+      {source:"singh_aggregation_2024.pdf",stance:"QUALIFIES",evidence:"Recall gain holds only when data is near-IID across institutions.",confidence:3},
+      {source:"liu_explainable_2025.pdf",stance:"QUALIFIES",evidence:"Recall is preserved but explainability degrades sharply under noise.",confidence:3}
+    ],
+    tele:"6 passages retrieved · 5 classified · 1 UNRELATED omitted · inference 1,089ms"
+  },
+  analysis:{
+    problem:"Balancing fraud-detection recall against differential-privacy guarantees in federated cross-border payment systems.",
+    method:"Jurisdiction-aware aggregation scheme evaluated on a synthetic cross-border payments dataset against a FedAvg baseline.",
+    findings:["4.1% recall improvement at ε=2.0 privacy budget vs FedAvg","Trained without centralising raw institutional data","Models remain difficult to explain to regulators"],
+    limitations:["Evaluated on synthetic data only","Regulatory explainability not quantitatively measured"],
+    gaps:["Quantify explainability trade-off alongside recall and privacy","Validate on real multi-jurisdiction transaction data","Test robustness to non-IID institutional data distributions"],
+    tele:"1,847 chars processed · 7 fields extracted · inference 887ms"
+  },
+  vectors:{
+    ideas:[
+      {title:"Privacy–Recall–Explainability Trilemma",question:"Can a single federated scheme simultaneously optimise all three, or is there a hard Pareto frontier?",novelty:5,feasibility:3,rationale:"Formally characterises a tension regulators and engineers both recognise but no paper has bounded."},
+      {title:"Jurisdiction-Aware Aggregation Benchmark Suite",question:"How do aggregation strategies compare across simulated regulatory regimes at varying privacy budgets?",novelty:3,feasibility:5,rationale:"A reusable benchmark anchors a sub-field; buildable with synthetic data, directly publishable."},
+      {title:"Privacy-Robust Explainability Proxies",question:"Which post-hoc explanation methods survive the federated, differentially-private constraint?",novelty:4,feasibility:4,rationale:"Addresses the open regulator-facing gap in the source paper and has direct practitioner value."}
+    ],
+    tele:"3 vectors generated · novelty range 3–5 · feasibility range 3–5 · inference 1,072ms"
+  },
+  synthesis:{
+    text:"Explainability remains a central unresolved challenge for federated fraud-detection systems operating across jurisdictions. Because models train without centralising data, no single party observes the full feature space, complicating post-hoc attribution [CITE: McMahan et al., 2017, Communication-Efficient Learning of Deep Networks from Decentralized Data]. The ISO 20022 migration enriches transaction semantics, which in principle affords richer explanations; however, differential-privacy noise injected at aggregation can obscure precisely the signals regulators require [CITE: Dwork & Roth, 2014, The Algorithmic Foundations of Differential Privacy]. Some authors contend this tension is now fully resolved [CITE: Nainar & Kumar, 2023, A Unified Solution to Federated Privacy Tradeoffs in Payments] — a claim that warrants independent verification before citation.",
+    tele:"187 tokens · 3 [CITE] markers emitted · temp 0.20 · inference 2,314ms"
+  },
+  integrity:{
+    results:[
+      {claimed:"McMahan et al., 2017, Communication-Efficient Learning of Deep Networks from Decentralized Data",status:"VERIFIED",matched_title:"Communication-Efficient Learning of Deep Networks from Decentralized Data",doi:"10.48550/arXiv.1602.05629",score:0.97,detail:"Strong match confirmed in CrossRef."},
+      {claimed:"Dwork & Roth, 2014, The Algorithmic Foundations of Differential Privacy",status:"VERIFIED",matched_title:"The Algorithmic Foundations of Differential Privacy",doi:"10.1561/0400000042",score:0.94,detail:"Strong match confirmed in CrossRef."},
+      {claimed:"Nainar & Kumar, 2023, A Unified Solution to Federated Privacy Tradeoffs in Payments",status:"UNRESOLVED",matched_title:"(no convincing match)",doi:"",score:0.21,detail:"No match in CrossRef — likely fabricated by the model."}
+    ],
+    numeric:[{type:"PARTITION_SUM_ANOMALY",detail:"Percentages [55, 30, 40] sum to 125% — inconsistent with a claimed partition.",fragment:"the institution breakdown was 55%, 30%, and 40%"}],
+    tele:"3 citations · 2 verified · 1 unresolved · 1 numeric anomaly · CrossRef 1,840ms · wall 4,213ms"
+  }
+  ,citations:{
+    pdf:"Securing Web-Capable LLM Agents - Threat Model, Attack Taxonomy, and Defense Framework.pdf",
+    total:3,found:2,not_found:1,errors:0,
+    references:[
+      {raw:"[1] Greshake et al. (2023). Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection.",title:"Not What You've Signed Up For",authors:"Greshake et al.",year:"2023",status:"FOUND",source:"SEMANTIC_SCHOLAR",matched_title:"Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection",doi:"10.48550/arXiv.2302.12173",abstract:"We analyze indirect prompt injection threats to LLM-integrated applications, showing attackers can exfiltrate data or trigger actions via injected web content.",url:"https://doi.org/10.48550/arXiv.2302.12173",similarity:0.95},
+      {raw:"[2] Perez & Ribeiro (2022). Ignore Previous Prompt: Attack Techniques For Language Models.",title:"Ignore Previous Prompt",authors:"Perez, Ribeiro",year:"2022",status:"FOUND",source:"CROSSREF",matched_title:"Ignore Previous Prompt: Attack Techniques For Language Models",doi:"10.48550/arXiv.2211.09527",abstract:null,url:"https://doi.org/10.48550/arXiv.2211.09527",similarity:0.82},
+      {raw:"[3] Smith & Jones (2024). Complete Enumeration of LLM Attack Surfaces.",title:"Complete Enumeration of LLM Attack Surfaces",authors:"Smith, Jones",year:"2024",status:"NOT_FOUND",source:null,matched_title:null,doi:null,abstract:null,url:null,similarity:null}
+    ]
+  }
+};
+
+const AUDIT=[
+  {ts:"2026-06-16 09:14:02",mod:"grounded_query",model:"llama3.1:8b",temp:"0.10",psig:"4f1c9a2e",osig:"a7b3d682ec091f42"},
+  {ts:"2026-06-16 09:15:41",mod:"evidence_divergence",model:"llama3.1:8b",temp:"0.10",psig:"b8e3f17c",osig:"39d4c120a8f57e91"},
+  {ts:"2026-06-16 09:17:08",mod:"synthesis",model:"llama3.1:8b",temp:"0.20",psig:"7a2d4e81",osig:"8e72d4f019ac5b63"}
+];
+
+/* ─── navigation ─────────────────────── */
+document.querySelectorAll('.sb-item').forEach(el=>{
+  el.onclick=()=>{
+    document.querySelectorAll('.sb-item').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('p-'+el.dataset.p).classList.add('active');
+    if(el.dataset.p==='audit') renderAudit();
+  };
+});
+
+function load(id,v){document.getElementById(id).value=v;}
+
+function busy(id){
+  document.getElementById(id).innerHTML=
+    `<div class="out-body"><span class="placeholder" style="color:var(--blue)">Running pipeline…</span></div>`;
+}
+function fake(o){return new Promise(r=>setTimeout(()=>r(o),700));}
+async function callApi(ep,p){const r=await fetch('/api/'+ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});return r.json();}
+
+function tele(str){
+  return `<div class="telemetry"><span class="t-ok">●</span><span class="t-sep">·</span>`+
+    str.split('·').map(s=>`<span>${s.trim()}</span>`).join('<span class="t-sep">·</span>')+
+    `<span class="t-sep">·</span><span class="t-session">lxq_4a91d8c7</span></div>`;
+}
+
+/* ─── renderers ──────────────────────── */
+async function run(mod){
+  if(mod==='grounded'){
+    busy('g-out');
+    const webEnrich=document.getElementById('g-web-enrich').checked;
+    const d=LIVE?await callApi('grounded',{question:document.getElementById('g-in').value,web_enrich:webEnrich}):await fake(CANNED.grounded);
+    const ans=d.answer.replace(/\[S:([a-zA-Z0-9_]+)\]/g,'<span class="stag">S:$1</span>');
+    const renderPassage=(p,isWeb)=>{
+      const cls=isWeb?'ev-card web':'ev-card';
+      const badge=`<span class="ev-origin ${isWeb?'WEB':'LOCAL'}">${isWeb?'WEB':'LOCAL'}</span>`;
+      const meta=isWeb
+        ?`<span>${badge}${p.source}</span>${p.url?`<a href="${p.url}" target="_blank" style="font-size:10px;color:#7C3AED;text-decoration:none">↗ paper</a>`:''}`
+        :`<span>${badge}S:${p.id} · ${p.source} · p.${p.page}</span><span>similarity ${p.score}</span>`;
+      return `<div class="${cls}"><div class="ev-meta">${meta}</div><div class="ev-text">${p.text}</div></div>`;
+    };
+    const localEv=(d.passages||[]).map(p=>renderPassage(p,false)).join('');
+    const webEv=(d.web_passages||[]).map(p=>renderPassage(p,true)).join('');
+    const webSection=webEv?`<div class="ev-lbl" style="margin-top:12px;color:#7C3AED">Internet passages (Semantic Scholar)</div>${webEv}`:'';
+    document.getElementById('g-out').innerHTML=
+      `<div class="out-body"><p class="g-answer">${ans}</p><div class="ev-list"><div class="ev-lbl">Local corpus passages</div>${localEv||'<em style="font-size:12px;color:var(--t3)">No local matches</em>'}${webSection}</div></div>`+(d.tele?tele(d.tele):'');
+  }
+  else if(mod==='divergence'){
+    busy('d-out');
+    const d=LIVE?await callApi('contradict',{claim:document.getElementById('d-in').value}):await fake(CANNED.divergence);
+    const c=d.consensus;
+    const tiles=`<div class="consensus-row"><div class="ctile S"><div class="ctile-n">${c.SUPPORTS||0}</div><div class="ctile-l">Support</div></div><div class="ctile C"><div class="ctile-n">${c.CONTRADICTS||0}</div><div class="ctile-l">Contradict</div></div><div class="ctile Q"><div class="ctile-n">${c.QUALIFIES||0}</div><div class="ctile-l">Qualify</div></div></div>`;
+    const rows=d.findings.map(f=>`<div class="stance-row"><div class="stance ${f.stance}">${f.stance}</div><div><div class="st-src">${f.source}</div><div class="st-ev">${f.evidence}</div></div></div>`).join('');
+    document.getElementById('d-out').innerHTML=`<div class="out-body">${tiles}${rows}</div>`+tele(d.tele);
+  }
+  else if(mod==='analysis'){
+    busy('a-out');
+    const d=LIVE?await callApi('triage',{text:document.getElementById('a-in').value}):await fake(CANNED.analysis);
+    const f=(k,v)=>`<div class="field"><div class="field-k">${k}</div><div class="field-v">${v}</div></div>`;
+    const li=a=>'<ul>'+a.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+    document.getElementById('a-out').innerHTML=
+      `<div class="out-body">${f('Problem statement',d.problem)}${f('Methodology',d.method)}${f('Key findings',li(d.findings))}${f('Limitations',li(d.limitations))}<div class="field"><div class="field-k">Research gaps</div>${d.gaps.map(g=>`<span class="gap-tag">${g}</span>`).join('')}</div></div>`+tele(d.tele);
+  }
+  else if(mod==='vectors'){
+    busy('v-out');
+    const d=LIVE?await callApi('ideate',{context:document.getElementById('v-in').value}):await fake(CANNED.vectors);
+    document.getElementById('v-out').innerHTML=
+      `<div class="out-body">${d.ideas.map(i=>`<div class="idea"><div class="idea-title">${i.title}</div><div class="idea-q">${i.question}</div><div class="idea-scores"><div class="score-item">novelty ${i.novelty}/5<div class="bar"><i style="width:${i.novelty*20}%"></i></div></div><div class="score-item">feasibility ${i.feasibility}/5<div class="bar"><i style="width:${i.feasibility*20}%"></i></div></div></div><div class="idea-rat">${i.rationale}</div></div>`).join('')}</div>`+tele(d.tele);
+  }
+  else if(mod==='synthesis'){
+    busy('s-out');
+    const d=LIVE?await callApi('draft',{notes:document.getElementById('s-in').value}):await fake(CANNED.synthesis);
+    const text=(d.text||d.draft||'').replace(/\[CITE:(.*?)\]/g,'<span class="cite-mark">CITE:$1</span>');
+    document.getElementById('i-in').value=(d.text||d.draft||'')+"\nIn the evaluated cohort, the institution breakdown was 55%, 30%, and 40% respectively.";
+    document.getElementById('s-out').innerHTML=
+      `<div class="out-body"><p class="draft-text">${text}</p><div class="draft-note">⚠ Draft output — [CITE] markers are unverified assertions. Route through Reference Integrity before use.</div></div>`+tele(d.tele);
+  }
+  else if(mod==='integrity'){
+    busy('i-out');
+    const d=LIVE?await callApi('verify',{text:document.getElementById('i-in').value}):await fake(CANNED.integrity);
+    const summary=`<div class="int-summary"><div class="int-tile ok">● ${(d.results||[]).filter(r=>r.status==='VERIFIED').length} verified</div><div class="int-tile err">● ${(d.results||[]).filter(r=>r.status==='UNRESOLVED').length} unresolved</div><div class="int-tile warn">● ${(d.numeric||[]).length} numeric anomaly</div></div>`;
+    const cards=(d.results||[]).map(c=>`<div class="cite-card"><div class="v-badge ${c.status||'UNRESOLVED'}">${c.status||'UNRESOLVED'}</div><div><div class="cite-claimed">${c.claimed}</div><div class="cite-detail">${c.detail}</div>${c.doi?`<div class="cite-doi">doi:${c.doi}</div>`:''}</div></div>`).join('');
+    const nums=(d.numeric||[]).map(n=>`<div class="num-flag"><div class="num-flag-h">${n.type}</div><div class="num-flag-d">${n.detail}</div><div class="num-flag-f">"…${n.fragment}…"</div></div>`).join('');
+    document.getElementById('i-out').innerHTML=`<div class="out-body">${summary}${cards}${nums}</div>`+tele(d.tele);
+  }
+}
+
+function renderAudit(){
+  document.getElementById('audit-body').innerHTML=AUDIT.map(e=>
+    `<tr><td class="ts">${e.ts}</td><td class="mod">${e.mod}</td><td class="model">${e.model}</td><td>${e.temp}</td><td class="hash">${e.psig}…</td><td class="hash">${e.osig}</td></tr>`
+  ).join('');
+}
+
+function exportAudit(){
+  const blob=new Blob([AUDIT.map(e=>JSON.stringify(e)).join('\n')],{type:'application/jsonlines'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lexiq_audit_lxq_4a91d8c7.jsonl';a.click();
+}
+
+['g-in','d-in','a-in','v-in','s-in','i-in'].forEach((id,i)=>{
+  const keys=['grounded','divergence','analysis','vectors','synthesis','integrity'];
+  load(id,S[keys[i]]);
+});
+
+/* ─── citation trail ─────────────────────── */
+async function runCitations(){
+  const pdf=document.getElementById('ct-pdf').value;
+  if(!pdf) return;
+  busy('ct-out');
+  const t0=Date.now();
+  const d=LIVE?await callApi('citations',{pdf}):await fake(CANNED.citations);
+  if(d.error){
+    document.getElementById('ct-out').innerHTML=
+      `<div class="out-body"><span class="placeholder" style="color:var(--red)">${d.error}</span></div>`;
+    return;
+  }
+  const refs=d.references||[];
+  const banner=
+    `<div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-bottom:12px">`+
+    `${d.total} references · <span style="color:var(--green)">${d.found} verified</span> · `+
+    `<span style="color:var(--red)">${d.not_found} not found</span>`+
+    (d.errors?` · <span style="color:var(--amber)">${d.errors} errors</span>`:'')+
+    `</div>`;
+  const cards=refs.map((r)=>{
+    const badge=r.status==='FOUND'
+      ?`<span class="v-badge VERIFIED">FOUND</span>`
+      :r.status==='NOT_FOUND'
+      ?`<span class="v-badge UNRESOLVED">NOT FOUND</span>`
+      :`<span class="v-badge MISATTRIBUTED">ERROR</span>`;
+    const srcBadge=r.source
+      ?`<span class="mbadge ${r.source==='SEMANTIC_SCHOLAR'?'multi':'deterministic'}" style="font-size:9px;margin-left:4px">${r.source.replace('_',' ')}</span>`:'';
+    const raw=(r.raw||'').slice(0,120)+((r.raw||'').length>120?'…':'');
+    const meta=r.matched_title
+      ?`<div style="font-size:12px;font-weight:600;color:var(--t1);margin-top:5px">${r.matched_title}</div>`+
+       `<div style="font-size:11px;color:var(--t2);margin-top:2px">${[r.authors,r.year?'('+r.year+')':null].filter(Boolean).join(' ')}</div>`+
+       (r.doi?`<div class="cite-doi"><a href="${r.url||'https://doi.org/'+r.doi}" target="_blank" style="color:var(--blue)">${r.doi}</a></div>`:``) +
+       (r.abstract?`<div style="font-size:11px;color:var(--t3);margin-top:4px;font-style:italic">${r.abstract.slice(0,180)}…</div>`:``)
+      :'';
+    return `<div class="cite-card"><div>${badge}${srcBadge}</div><div><div class="cite-claimed">${raw}</div>${meta}</div></div>`;
+  }).join('');
+  const ms=Date.now()-t0;
+  document.getElementById('ct-out').innerHTML=
+    `<div class="out-body">${banner}${cards||'<span class="placeholder">No references extracted.</span>'}</div>`+
+    tele(`${d.total} refs extracted · ${d.found} verified · ${ms.toLocaleString()}ms`);
+}
+
+/* populate PDF dropdown from /api/corpus on load */
+(async function initCorpusPicker(){
+  const sel=document.getElementById('ct-pdf');
+  if(!sel) return;
+  if(!LIVE){
+    sel.innerHTML=`<option value="${CANNED.citations.pdf}">${CANNED.citations.pdf}</option>`;
+    return;
+  }
+  try{
+    const data=await fetch('/api/corpus').then(r=>r.json());
+    const sources=(data.available_pdfs||Object.keys(data.by_source||{}));
+    sel.innerHTML=sources.length
+      ?sources.map(k=>`<option value="${k}">${k}</option>`).join('')
+      :`<option value="">No PDFs found in corpus</option>`;
+  }catch(e){
+    sel.innerHTML=`<option value="">Could not load corpus</option>`;
+  }
+})();
+</script>
+</body>
+</html>
