@@ -1,2 +1,4 @@
 Dashboard_Generator/venv/lib/python3.9/site-packages/lancedb/_lancedb.abi3.so
 .worktrees/
+eb1a-vault/tools/vault_data.json
+eb1a-vault/tools/vault_viewer_final.html
