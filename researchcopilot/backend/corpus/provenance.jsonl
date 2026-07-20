@@ -1,0 +1,2 @@
+{"timestamp": "2026-06-16T13:18:57.587656+00:00", "module": "triage", "model": "llama3.1:8b", "temperature": 0.2, "prompt_sha256": "cb2fea287ffb357f", "output_sha256": "0abb53c6ebe712e11c8bea88525a3ef88c618fb13c230d9cce60bf2e74026a69", "output_chars": 16}
+{"timestamp": "2026-06-30T11:56:26.287266+00:00", "module": "draft", "model": "llama3.1:latest", "temperature": 0.2, "prompt_sha256": "c4ef5d62f8605797", "output_sha256": "ebe580fef6c3b17b4f8b92e524ca1ae3f85f0a11420eda6a94285e9772177a69", "output_chars": 1105}
