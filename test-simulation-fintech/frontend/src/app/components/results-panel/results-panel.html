@@ -1,0 +1,127 @@
+<div style="background:white; border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+  <!-- Tab buttons -->
+  <div style="display:flex; border-bottom:2px solid #f0f0f0; background:#fafafa;">
+    <button (click)="activeTab=0" type="button"
+      [style]="activeTab===0 ? 'padding:12px 20px; border:none; background:white; color:#3f51b5; font-weight:600; font-size:0.875rem; cursor:pointer; border-bottom:2px solid #3f51b5; margin-bottom:-2px; font-family:inherit;' : 'padding:12px 20px; border:none; background:transparent; color:#888; font-size:0.875rem; cursor:pointer; font-family:inherit;'">
+      ⚖ Engine comparison
+    </button>
+    <button (click)="activeTab=1" type="button"
+      [style]="activeTab===1 ? 'padding:12px 20px; border:none; background:white; color:#3f51b5; font-weight:600; font-size:0.875rem; cursor:pointer; border-bottom:2px solid #3f51b5; margin-bottom:-2px; font-family:inherit;' : 'padding:12px 20px; border:none; background:transparent; color:#888; font-size:0.875rem; cursor:pointer; font-family:inherit;'">
+      📊 Coverage analysis
+    </button>
+    <button (click)="activeTab=2" type="button"
+      [style]="activeTab===2 ? 'padding:12px 20px; border:none; background:white; color:#3f51b5; font-weight:600; font-size:0.875rem; cursor:pointer; border-bottom:2px solid #3f51b5; margin-bottom:-2px; font-family:inherit;' : 'padding:12px 20px; border:none; background:transparent; color:#888; font-size:0.875rem; cursor:pointer; font-family:inherit;'">
+      ✨ LLM-exclusive
+      <span *ngIf="llmExclusiveCases.length > 0"
+        style="background:#ff5722; color:white; border-radius:10px; padding:1px 7px; font-size:0.7rem; margin-left:4px;">
+        {{llmExclusiveCases.length}}
+      </span>
+    </button>
+  </div>
+
+  <!-- Tab 0: Engine comparison -->
+  <div *ngIf="activeTab===0" style="padding:20px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+
+      <!-- Rule-based -->
+      <div style="background:#f3f4fb; border:1.5px solid #c5cae9; border-radius:10px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+          <span style="font-size:1.2rem;">📏</span>
+          <div>
+            <div style="font-size:0.9rem; font-weight:600; color:#1a1a2e;">Rule-based engine</div>
+            <span style="background:#3f51b520; color:#3f51b5; font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px;">{{result.ruleBasedCases.length}} cases</span>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div *ngFor="let tc of result.ruleBasedCases"
+            style="background:white; border-radius:8px; padding:12px; border:1px solid #e0e0e0; cursor:pointer;"
+            (click)="toggleCase(tc.id)">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span [style]="'font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px; text-transform:uppercase; background:' + categoryColor(tc.category) + '20; color:' + categoryColor(tc.category)">
+                {{categoryLabel(tc.category)}}
+              </span>
+              <span style="color:#aaa; font-size:0.8rem;">{{expandedCase === tc.id ? '▲' : '▼'}}</span>
+            </div>
+            <div style="font-size:0.875rem; font-weight:500; color:#333;">{{tc.title}}</div>
+            <div *ngIf="expandedCase === tc.id" style="margin-top:10px; border-top:1px solid #f0f0f0; padding-top:10px;">
+              <div style="font-size:0.82rem; color:#555; margin-bottom:8px;">{{tc.description}}</div>
+              <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:#aaa; margin-bottom:4px;">Expected behavior</div>
+              <div style="font-size:0.82rem; color:#444;">{{tc.expectedBehavior}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM -->
+      <div style="background:#e0f7fa; border:1.5px solid #80deea; border-radius:10px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+          <span style="font-size:1.2rem;">🧠</span>
+          <div>
+            <div style="font-size:0.9rem; font-weight:600; color:#1a1a2e;">LLM engine (Ollama)</div>
+            <span style="background:#00bcd420; color:#00838f; font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px; margin-right:4px;">{{result.llmCases.length}} cases</span>
+            <span *ngIf="llmExclusiveCases.length > 0" style="background:#ff572220; color:#bf360c; font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px;">{{llmExclusiveCases.length}} exclusive</span>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div *ngFor="let tc of result.llmCases"
+            style="background:white; border-radius:8px; padding:12px; border:1px solid #e0e0e0; cursor:pointer;"
+            (click)="toggleCase(tc.id)">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span [style]="'font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px; text-transform:uppercase; background:' + categoryColor(tc.category) + '20; color:' + categoryColor(tc.category)">
+                {{categoryLabel(tc.category)}}
+              </span>
+              <span style="color:#aaa; font-size:0.8rem;">{{expandedCase === tc.id ? '▲' : '▼'}}</span>
+            </div>
+            <div style="font-size:0.875rem; font-weight:500; color:#333;">{{tc.title}}</div>
+            <div *ngIf="expandedCase === tc.id" style="margin-top:10px; border-top:1px solid #f0f0f0; padding-top:10px;">
+              <div style="font-size:0.82rem; color:#555; margin-bottom:8px;">{{tc.description}}</div>
+              <div *ngIf="tc.llmReasoning" style="background:#fff8e1; border-radius:6px; padding:8px 10px; margin-bottom:8px;">
+                <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:#f57f17; margin-bottom:4px;">💡 Why rules miss this</div>
+                <div style="font-size:0.82rem; color:#5d4037;">{{tc.llmReasoning}}</div>
+              </div>
+              <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:#aaa; margin-bottom:4px;">Expected behavior</div>
+              <div style="font-size:0.82rem; color:#444;">{{tc.expectedBehavior}}</div>
+            </div>
+          </div>
+          <div *ngIf="result.llmCases.length === 0"
+            style="text-align:center; padding:24px; color:#aaa; font-size:0.875rem;">
+            No LLM cases — check Ollama is running
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 1: Coverage chart -->
+  <div *ngIf="activeTab===1" style="padding:20px;">
+    <app-coverage-chart [report]="result.coverageReport"></app-coverage-chart>
+  </div>
+
+  <!-- Tab 2: LLM-exclusive cases -->
+  <div *ngIf="activeTab===2" style="padding:20px;">
+    <div style="margin-bottom:16px;">
+      <div style="font-size:1rem; font-weight:600; color:#1a1a2e; margin-bottom:4px;">Cases only the LLM found</div>
+      <div style="font-size:0.85rem; color:#666;">These are the compliance gaps the rule engine cannot enumerate — the core research finding.</div>
+    </div>
+    <div *ngIf="llmExclusiveCases.length === 0"
+      style="text-align:center; padding:40px; color:#aaa; font-size:0.875rem;">
+      ✓ Both engines found the same categories for this scenario
+    </div>
+    <div *ngFor="let tc of llmExclusiveCases"
+      style="background:#fff3e0; border:1.5px solid #ffcc80; border-left:4px solid #ff5722; border-radius:8px; padding:16px; margin-bottom:12px;">
+      <span [style]="'font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px; text-transform:uppercase; background:' + categoryColor(tc.category) + '20; color:' + categoryColor(tc.category)">
+        {{categoryLabel(tc.category)}}
+      </span>
+      <div style="font-size:0.95rem; font-weight:600; color:#1a1a2e; margin:8px 0 4px;">{{tc.title}}</div>
+      <div style="font-size:0.85rem; color:#555; margin-bottom:10px;">{{tc.description}}</div>
+      <div *ngIf="tc.llmReasoning" style="background:#fff8e1; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+        <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:#f57f17; margin-bottom:4px;">💡 Why rules miss this</div>
+        <div style="font-size:0.83rem; color:#5d4037;">{{tc.llmReasoning}}</div>
+      </div>
+      <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:#aaa; margin-bottom:4px;">Expected behavior</div>
+      <div style="font-size:0.83rem; color:#444;">{{tc.expectedBehavior}}</div>
+    </div>
+  </div>
+
+</div>

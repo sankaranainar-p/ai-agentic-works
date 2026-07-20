@@ -1,0 +1,58 @@
+<div style="min-height:100vh; background:#f4f6f9;">
+
+  <!-- Header -->
+  <div style="background:#1a1a2e; color:white; height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 32px; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span class="material-icons" style="color:#00bcd4; font-size:28px;">account_balance</span>
+      <div>
+        <div style="font-size:1.1rem; font-weight:700;">Test Simulation FinTech</div>
+        <div style="font-size:0.72rem; color:rgba(255,255,255,0.5);">AI-driven compliance test coverage for payment flows</div>
+      </div>
+    </div>
+    <div *ngIf="health" [style]="health!.llmAvailable ? 'background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.3); color:#69f0ae; border-radius:20px; padding:5px 14px; font-size:0.75rem; display:flex; align-items:center; gap:7px;' : 'background:rgba(239,83,80,0.1); border:1px solid rgba(239,83,80,0.3); color:#ef9a9a; border-radius:20px; padding:5px 14px; font-size:0.75rem; display:flex; align-items:center; gap:7px;'">
+      <span [style]="health!.llmAvailable ? 'width:7px;height:7px;border-radius:50%;background:#00e676;box-shadow:0 0 6px #00e676;display:inline-block;' : 'width:7px;height:7px;border-radius:50%;background:#ef5350;display:inline-block;'"></span>
+      {{ health!.llmAvailable ? health!.llmProvider : 'LLM unavailable' }}
+    </div>
+    <div *ngIf="!health" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.4); border-radius:20px; padding:5px 14px; font-size:0.75rem; display:flex; align-items:center; gap:7px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:#666;display:inline-block;"></span>
+      Backend offline — start Spring Boot on port 8080
+    </div>
+  </div>
+
+  <!-- Research banner -->
+  <div style="background:#e8eaf6; border-bottom:1px solid #c5cae9; padding:9px 32px; font-size:0.82rem; color:#3949ab; display:flex; align-items:center; gap:8px;">
+    <span style="font-size:16px;">🔬</span>
+    <span><strong>Research thesis:</strong> LLM semantic reasoning generates significantly higher compliance-critical test coverage than rule-based engines — detecting edge cases that static scenario trees systematically miss.</span>
+  </div>
+
+  <!-- Content -->
+  <div style="display:grid; grid-template-columns:390px 1fr; gap:24px; padding:28px 32px; max-width:1400px; margin:0 auto;">
+
+    <!-- Form -->
+    <div style="position:sticky; top:80px; align-self:start;">
+      <app-scenario-form (analysisComplete)="onAnalysisComplete($event)"></app-scenario-form>
+    </div>
+
+    <!-- Results -->
+    <div id="results-anchor">
+      <div *ngIf="!result" style="background:white; border-radius:12px; padding:80px 32px; text-align:center; border:2px dashed #e0e0e0; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+        <span class="material-icons" style="font-size:52px; color:#e0e0e0; display:block; margin-bottom:16px;">analytics</span>
+        <div style="font-size:1.1rem; font-weight:500; color:#aaa; margin-bottom:8px;">Results will appear here</div>
+        <div style="font-size:0.85rem; color:#ccc;">Submit a scenario to run both engines and see the coverage comparison</div>
+      </div>
+      <div *ngIf="result">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:8px; font-size:1.05rem; font-weight:600;">
+            <span class="material-icons" style="color:#43a047;">check_circle</span>
+            {{ result!.scenario.title }}
+          </div>
+          <span style="background:#e8eaf6; color:#3949ab; border-radius:20px; padding:4px 14px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">
+            {{ result!.scenario.domain | domainLabel }}
+          </span>
+        </div>
+        <app-results-panel [result]="result"></app-results-panel>
+      </div>
+    </div>
+
+  </div>
+</div>

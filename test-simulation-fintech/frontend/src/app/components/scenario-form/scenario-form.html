@@ -1,0 +1,86 @@
+<div style="background:white; border-radius:12px; padding:24px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+  <div style="margin-bottom:20px;">
+    <div style="font-size:1.05rem; font-weight:600; color:#1a1a2e; margin-bottom:4px;">New Scenario</div>
+    <div style="font-size:0.8rem; color:#888;">Describe a FinTech payment flow — both engines will generate test cases simultaneously</div>
+  </div>
+
+  <div *ngIf="error" style="display:flex; align-items:center; gap:8px; background:#fdecea; color:#c62828; border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem;">
+    ⚠ {{ error }}
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Domain *</label>
+      <select formControlName="domain" (change)="onDomainChange()" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; background:white; color:#1a1a2e; outline:none; cursor:pointer;">
+        <option value="" disabled selected>Select a domain...</option>
+        <option value="CROSS_BORDER_PAYMENT">Cross-Border Payment Delays</option>
+        <option value="FRAUD_SPIKE">Fraud Spike Detection</option>
+        <option value="COMPLIANCE_THRESHOLD">Compliance Threshold Violations</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:14px;" *ngIf="form.get('domain')?.value">
+      <button type="button"
+        (click)="loadExample(form.get('domain')?.value)"
+        style="background:#f0f4ff; color:#3f51b5; border:1.5px solid #c5cae9; border-radius:20px; padding:5px 16px; font-size:0.82rem; cursor:pointer; font-family:inherit; font-weight:500;">
+        ✨ Fill example scenario
+      </button>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Scenario title *</label>
+      <input formControlName="title" type="text" placeholder="e.g. SWIFT cross-border to high-risk corridor" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; color:#1a1a2e;">
+      <div *ngIf="form.get('title')?.invalid && form.get('title')?.touched" style="color:#e53935; font-size:0.75rem; margin-top:4px;">Title must be at least 5 characters</div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Flow description *</label>
+      <textarea formControlName="flowDescription" rows="3" placeholder="Describe the payment flow in detail — amounts, timing, jurisdictions, channels" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; resize:vertical; color:#1a1a2e;"></textarea>
+      <div *ngIf="form.get('flowDescription')?.invalid && form.get('flowDescription')?.touched" style="color:#e53935; font-size:0.75rem; margin-top:4px;">Description must be at least 20 characters</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div>
+        <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Source country</label>
+        <input formControlName="sourceCountry" type="text" placeholder="e.g. DE" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; color:#1a1a2e;">
+      </div>
+      <div>
+        <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Destination country</label>
+        <input formControlName="destinationCountry" type="text" placeholder="e.g. AE" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; color:#1a1a2e;">
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div>
+        <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Currency</label>
+        <input formControlName="currency" type="text" placeholder="e.g. EUR" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; color:#1a1a2e;">
+      </div>
+      <div>
+        <label style="display:block; font-size:0.78rem; font-weight:600; color:#555; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;">Amount ($)</label>
+        <input formControlName="amount" type="number" placeholder="e.g. 45000" style="width:100%; padding:10px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:0.9rem; font-family:inherit; outline:none; color:#1a1a2e;">
+      </div>
+    </div>
+
+    <div style="background:#f8f9fa; border-radius:8px; padding:12px 14px; margin-bottom:16px; display:flex; flex-direction:column; gap:10px;">
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.875rem; color:#444;">
+        <input type="checkbox" formControlName="crossBorderFlag" style="width:16px; height:16px; accent-color:#3f51b5; cursor:pointer;">
+        Cross-border payment
+      </label>
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.875rem; color:#444;">
+        <input type="checkbox" formControlName="highRiskJurisdiction" style="width:16px; height:16px; accent-color:#e53935; cursor:pointer;">
+        High-risk jurisdiction
+      </label>
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.875rem; color:#444;">
+        <input type="checkbox" formControlName="regulatedAsset" style="width:16px; height:16px; accent-color:#7b1fa2; cursor:pointer;">
+        Regulated asset (crypto / securities)
+      </label>
+    </div>
+
+    <button type="submit" [disabled]="form.invalid || loading" style="width:100%; height:44px; background:#3f51b5; color:white; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-family:inherit; transition:background 0.2s;" [style.opacity]="form.invalid || loading ? '0.6' : '1'" [style.cursor]="form.invalid || loading ? 'not-allowed' : 'pointer'">
+      <span *ngIf="!loading">▶ Run dual-engine analysis</span>
+      <span *ngIf="loading">⏳ Analyzing with Ollama... (30–60 sec)</span>
+    </button>
+
+  </form>
+</div>
