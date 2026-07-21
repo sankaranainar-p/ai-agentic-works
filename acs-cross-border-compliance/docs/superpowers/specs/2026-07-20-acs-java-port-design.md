@@ -78,26 +78,57 @@ acs-cross-border-compliance/
 
 ## Dependencies (pom.xml)
 
-- `tech.tablesaw:tablesaw-core` (0.44.x) — CSV loading and table joins
-- `ml.dmlc:xgboost4j_2.12` (2.1.x) — same core engine as Python's `xgboost`;
-  confirmed to bundle a `macos/aarch64` native library, so it runs on this
-  machine (Apple Silicon) with no extra native setup
-- `org.jfree:jfreechart` (1.5.x) — renders `confusion_matrix.png`
+- `tech.tablesaw:tablesaw-core` (0.44.4) — CSV loading; API verified against
+  the real jar and real project CSVs (`Table.read().csv(...)`,
+  `intColumn`/`doubleColumn`/`stringColumn`/`dateTimeColumn` accessors,
+  `sortOn`, `addColumns`, `DoubleColumn.create`/`StringColumn.create` all
+  confirmed working against the actual `data/*.csv` files)
+- `ml.dmlc:xgboost4j_2.12` (2.1.4) — same core engine as Python's `xgboost`.
+  Bundles a `macos/aarch64` native library, but that native lib needs the
+  OpenMP runtime (`libomp`) present on the host — confirmed via a real
+  train/predict spike, which failed with `UnsatisfiedLinkError` until
+  `brew install libomp` was run (now installed on this machine). **The
+  README's setup section must document `brew install libomp` as a
+  prerequisite on macOS**, or the pipeline fails to start.
 - `org.junit.jupiter:junit-jupiter` (5.x) — tests
 - No IsolationForest/SMOTE library dependency — both are hand-ported (see
   Non-goals rationale)
+- **JFreeChart dropped.** A confusion matrix is a small annotated grid, not
+  a chart type JFreeChart supports directly (would need a hand-rigged
+  `XYBlockRenderer` + manual text annotations — more code and a dependency
+  for something plain JDK does natively). `RunPipeline` renders
+  `confusion_matrix.png` with `java.awt.image.BufferedImage` +
+  `Graphics2D` + `ImageIO.write`, matching matplotlib's
+  `ConfusionMatrixDisplay` layout (grid, per-cell counts, axis labels).
 
 ## Module-by-module mapping
 
-**DataLoader** — Loads the six CSVs and reproduces pandas' merge-chain
-suffixing *exactly as it actually happens*, not as a generic guess:
-`transactions.merge(users).merge(devices).merge(ips).merge(merchants).merge(chargebacks)`.
-Tracing the real collisions: step 1 (users) collides on `user_age_days` and
-`email_risk` → suffixed `_x`/`_y`; step 3 (ips) collides on `ip_risk_level`
-→ suffixed `_x`/`_y`; step 5 (chargebacks) collides on `created_at` →
-suffixed `_x`/`_y`. Devices and merchants introduce no collisions. Java
-column names must match this pattern (`created_at_x`, `ip_risk_level_y`,
-etc.) since downstream code depends on them.
+**DataLoader** — Traced which columns the pandas merge chain
+(`transactions.merge(users).merge(devices).merge(ips).merge(merchants).merge(chargebacks)`)
+actually feeds into any downstream computation (feature engineering,
+agents, orchestrator, evaluation). Verified (by grepping the whole
+pipeline for every column name) that **`users`, `merchants`, and
+`chargebacks` are joined in the Python version but none of their columns
+(`user_age_days`, `email_risk`, `merchant_risk`, `chargeback_at`,
+`chargeback_reason`) are ever read** — `is_fraud` comes directly from
+`transactions_raw.csv`'s own `fraud_label` column, not from chargeback
+presence. Also verified every join key (`device_id`, `ip_id`, `user_id`,
+`merchant_id`, `transaction_id`) is unique in its source table (18000,
+45000, 30000, 2000, 120000 rows respectively, all unique), so those joins
+are 1:1 and never duplicate rows.
+
+Given that, `DataLoader` only joins what's actually consumed: `devices`
+(for `is_fraud_device_hint` via `device_id`) and `ips` (for
+`ip_risk_level` via `ip_id`), via plain `HashMap` lookups built from each
+table, applied while iterating `transactions_raw`. This is a scope
+reduction, not a behavior change — the dropped columns were provably dead
+weight in the original pipeline too, output is identical, and it removes
+a meaningful amount of merge-suffix bookkeeping (`_x`/`_y` handling) for
+columns nothing downstream reads. Result table still has all 120,000 rows
+and includes: `transaction_id`, `user_id`, `created_at` (parsed
+timestamp), `amount`, `sender_country` (`card_country`),
+`receiver_country` (`country`), `is_fraud_device_hint`, `ip_risk_level`,
+`is_fraud` (from `fraud_label`).
 
 **FeatureEngineering** — `addComplianceFeatures` (cross-border flag,
 per-country threshold map, compliance violation flag, synthetic
@@ -170,6 +201,9 @@ pass. Only after this passes does the Python source get removed.
 - `README.md`: rewritten for the Java/Maven setup (`mvn package`, `mvn
   exec:java` or a runnable jar, `mvn test`), project structure section
   updated to the Java layout, known-limitation section preserved verbatim,
-  citation/license sections preserved verbatim.
+  citation/license sections preserved verbatim. Setup section documents
+  `brew install libomp` as a required macOS prerequisite (XGBoost4J's
+  native library won't load without it — confirmed by hitting this error
+  directly).
 - `requirements.txt` removed (replaced by `pom.xml`).
 - `LICENSE` unchanged (MIT).
