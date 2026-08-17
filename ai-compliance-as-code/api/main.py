@@ -22,12 +22,14 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import os
 import re
 import sys
 import time
+from functools import lru_cache
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import anthropic
 import httpx
@@ -47,6 +49,8 @@ from api.schemas import AnalyzeRequest, AnalyzeResponse, ComplianceFinding  # no
 from prompts.system_prompt import build_system_prompt  # noqa: E402
 from prompts.user_turn import build_user_turn  # noqa: E402
 from scanner.static_scanner import scan  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -122,65 +126,123 @@ def _resolve_rule_pack(regulation: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Helper: cached system-prompt construction
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=32)
+def _build_system_prompt_cached(
+    regulation: str,
+    rule_pack_path: str,
+    _mtime_ns: int,
+) -> str:
+    """Cached wrapper around build_system_prompt().
+
+    The rule packs are static JSON files, but the previous implementation
+    re-read and re-rendered them on every /analyze request.  ``_mtime_ns`` is
+    part of the cache key rather than being unused: editing a rule pack changes
+    the mtime and therefore transparently invalidates the entry, so operators
+    can still tune rules without restarting the service.
+    """
+    return build_system_prompt(regulation, Path(rule_pack_path))
+
+
+def _system_prompt_for(regulation: str, rule_pack_path: Path) -> str:
+    """Return the (cached) system prompt for *regulation*."""
+    try:
+        mtime_ns = rule_pack_path.stat().st_mtime_ns
+    except OSError:
+        # Cannot stat — fall back to an uncached build so the real error
+        # surfaces from build_system_prompt() itself.
+        return build_system_prompt(regulation, rule_pack_path)
+    return _build_system_prompt_cached(regulation, str(rule_pack_path), mtime_ns)
+
+
+# ---------------------------------------------------------------------------
 # Helper: strip markdown fences from raw LLM text
 # ---------------------------------------------------------------------------
 
 def _strip_fences(text: str) -> str:
-    """Remove leading/trailing markdown code fences and stray backticks."""
+    """Remove markdown code fences that wrap an LLM response.
+
+    Only fence markers at the start of a line are removed.  Backticks that
+    appear inside the payload are preserved, because they are frequently part
+    of a finding's ``snippet`` field and stripping them corrupts the source
+    code we report back to the developer.
+    """
     text = text.strip()
-    # Remove fenced blocks: ```json ... ``` or ``` ... ```
-    if text.startswith("```"):
-        lines = text.splitlines()
-        inner = [l for l in lines[1:] if l.strip() not in ("```", "```json")]
-        text = "\n".join(inner).strip()
-    # Remove any remaining bare backticks
-    text = text.replace("`", "").strip()
-    return text
+    if not text.startswith("```"):
+        return text
+
+    lines = text.splitlines()
+    # Drop the opening fence line (```/```json/```JSON etc.)
+    lines = lines[1:]
+    # Drop the matching closing fence if present.
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].strip().startswith("```"):
+            del lines[i]
+            break
+    return "\n".join(lines).strip()
+
+
+def _iter_json_candidates(text: str):
+    """Yield every syntactically valid JSON array/object embedded in *text*.
+
+    Uses ``json.JSONDecoder.raw_decode`` at each ``[``/``{`` position, so a
+    candidate is only produced when it actually parses.  This avoids the
+    greedy-regex failure modes where prose brackets ("[see rule 5]") or a
+    leading object followed by an array produce unparseable slices.
+
+    Yields:
+        Tuples of (start_index, parsed_value).
+    """
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r'[\[{]', text):
+        start = match.start()
+        try:
+            value, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            continue
+        yield start, value
 
 
 def _extract_json_array(text: str) -> str:
     """Extract the first JSON array or object block from *text*.
 
-    Tries in order:
-      1. Outermost [...] block  → use as-is (it's already an array)
-      2. Outermost {...} block  → may be {"violations": [...]} or a single finding;
-         unwrap if it contains a "violations" / "findings" key, else wrap in [...]
-      3. Falls back to the full text unchanged.
+    Scans for genuinely parseable JSON values and normalises whatever it finds
+    into a JSON array string.  Preference order:
+      1. The first valid top-level array.
+      2. The first valid object — unwrapped when it carries a
+         "violations"/"findings"/"results"/"issues" list, otherwise treated as
+         a single finding and wrapped in an array.
+      3. The original text unchanged, so the caller surfaces the parse error.
 
     This handles:
       • Properly formatted array:           [{"rule_id": ...}, ...]
       • Object wrapper:                      {"violations": [...]}
       • Single finding object:               {"rule_id": ..., "severity": "high", ...}
       • Array or object buried in prose:     "Here are the findings: [...]"
+      • Prose brackets before the array:     "Note [see rule 5]: [{...}]"
+      • An object preceding the array:       "{\"a\": 1} then [{...}]"
     """
-    # Prefer a top-level array
-    arr_match = re.search(r'\[.*\]', text, re.DOTALL)
-    obj_match = re.search(r'\{.*\}', text, re.DOTALL)
+    first_object: Optional[dict] = None
 
-    if arr_match and obj_match:
-        # Use whichever starts first in the string
-        if arr_match.start() <= obj_match.start():
-            return arr_match.group(0)
-    elif arr_match:
-        return arr_match.group(0)
+    for _, value in _iter_json_candidates(text):
+        # A list of findings is exactly what we want.
+        if isinstance(value, list):
+            return json.dumps(value)
+        # Remember the first object, but keep scanning for a real array —
+        # a wrapper object may appear before the findings array in prose.
+        if isinstance(value, dict) and first_object is None:
+            first_object = value
 
-    if obj_match:
-        obj_text = obj_match.group(0)
-        try:
-            parsed = json.loads(obj_text)
-        except json.JSONDecodeError:
-            return obj_text  # let the caller surface the parse error
-
-        # Unwrap {"violations": [...]} or {"findings": [...]}
+    if first_object is not None:
         for key in ("violations", "findings", "results", "issues"):
-            if key in parsed and isinstance(parsed[key], list):
-                return json.dumps(parsed[key])
-
-        # Single finding object — wrap it in an array
-        if isinstance(parsed, dict):
-            return json.dumps([parsed])
-
-        return obj_text
+            nested = first_object.get(key)
+            if isinstance(nested, list):
+                return json.dumps(nested)
+        # Single finding object — wrap it in an array.
+        return json.dumps([first_object])
 
     return text
 
@@ -193,6 +255,7 @@ class OllamaTimeoutError(RuntimeError):
     """Raised when the Ollama HTTP request exceeds the configured timeout."""
 
 
+@lru_cache(maxsize=32)
 def _condense_system_prompt(system_prompt: str) -> str:
     """Strip the system prompt down to rule IDs + titles only for Ollama.
 
@@ -215,11 +278,10 @@ def _condense_system_prompt(system_prompt: str) -> str:
     """
     # Extract just the [ID]  Title  (default severity: X) lines —
     # these are already present in the full prompt produced by build_system_prompt.
-    import re as _re
-    rule_lines = _re.findall(
+    rule_lines = re.findall(
         r'^\s+\[(\S+)\]\s+(.+?)\s+\(default severity: (\w+)\)',
         system_prompt,
-        _re.MULTILINE,
+        re.MULTILINE,
     )
 
     # Build a compact rules block
@@ -285,12 +347,11 @@ def _call_ollama(system_prompt: str, user_turn: str) -> str:
     condensed_system = _condense_system_prompt(system_prompt)
     full_prompt = _OLLAMA_JSON_PREAMBLE + condensed_system + "\n\n" + user_turn
 
-    print(
-        f"\n{'='*60}\n"
-        f"PROMPT SENT TO OLLAMA (model={model}, chars={len(full_prompt)}):\n"
-        f"{full_prompt[:800]}"
-        f"\n{'='*60}",
-        flush=True,
+    logger.debug(
+        "Ollama request: model=%s prompt_chars=%d\n%s",
+        model,
+        len(full_prompt),
+        full_prompt[:800],
     )
 
     try:
@@ -326,25 +387,19 @@ def _call_ollama(system_prompt: str, user_turn: str) -> str:
     if raw is None:
         raise RuntimeError(f"Ollama response missing 'response' field: {list(data.keys())}")
 
-    # Log raw response before any cleaning so we can see exactly what Ollama returned
-    print(
-        f"\n{'='*60}\n"
-        f"RAW OLLAMA RESPONSE (chars={len(raw)}):\n"
-        f"{raw[:500]}"
-        f"\n{'='*60}",
-        flush=True,
-    )
+    # Log the raw response before cleaning so the exact model output is visible.
+    logger.debug("Ollama raw response (chars=%d):\n%s", len(raw), raw[:500])
 
     cleaned = _strip_fences(raw)
     cleaned = _extract_json_array(cleaned)
 
-    print(f"[ollama cleaned] {cleaned[:300]!r}", flush=True)
+    logger.debug("Ollama cleaned response: %r", cleaned[:300])
 
     # Validate we can parse it before handing back to _parse_findings
     try:
         json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        print(f"[ollama parse failure] cleaned text: {cleaned[:500]!r}", flush=True)
+        logger.warning("Ollama response not parseable as JSON: %r", cleaned[:500])
         raise RuntimeError(
             f"Ollama response could not be parsed as JSON after cleaning: {exc}"
         ) from exc
@@ -532,7 +587,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     rule_pack_path = _resolve_rule_pack(request.regulation)
 
     # Step 3 — build prompts
-    system_prompt = build_system_prompt(request.regulation, rule_pack_path)
+    system_prompt = _system_prompt_for(request.regulation, rule_pack_path)
     user_turn = build_user_turn(
         code=request.code,
         file_path=request.file_path,
@@ -552,15 +607,26 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     try:
         raw_text, llm_provider = call_llm(system_prompt, user_turn)
         llm_findings = _parse_findings(raw_text, request.file_path)
-    except OllamaTimeoutError:
+    except OllamaTimeoutError as exc:
         llm_unavailable = True
         llm_provider = "ollama-timeout"
-    except _LLM_UNAVAILABLE_EXCEPTIONS:
+        logger.warning("LLM timed out; falling back to static findings: %s", exc)
+    except _LLM_UNAVAILABLE_EXCEPTIONS as exc:
         llm_unavailable = True
-    except ValueError:
+        logger.warning(
+            "LLM rejected our credentials; falling back to static findings: %s", exc
+        )
+    except ValueError as exc:
         llm_unavailable = True
+        logger.warning(
+            "LLM returned an unparseable response; falling back to static findings: %s",
+            exc,
+        )
     except Exception:
         llm_unavailable = True
+        # Still degrade gracefully — a broken LLM must never fail the request —
+        # but record the traceback so genuine bugs are not hidden.
+        logger.exception("Unexpected LLM error; falling back to static findings")
 
     # Step 6 — merge and deduplicate
     # Preserve specific failure labels (e.g. "ollama-timeout"); reset everything
