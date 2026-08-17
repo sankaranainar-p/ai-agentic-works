@@ -1,6 +1,0 @@
-{
-  "regulation": "GDPR",
-  "language": "java",
-  "severity_threshold": "low",
-  "llm_enabled": true
-}

@@ -1,1 +1,30 @@
+# Environment
 .env
+.env.*
+!.env.example
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / VS Code extension
+node_modules/
+extension/out/
+*.vsix
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+*.swp
