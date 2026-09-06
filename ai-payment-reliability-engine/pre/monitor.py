@@ -1,5 +1,5 @@
 """
-app/monitor.py — Background asyncio monitor loop.
+pre/monitor.py — Background asyncio monitor loop.
 
 Reads monitor-config.json from the project root, polls each configured
 metric source on its interval, and calls *incident_callback* whenever a
@@ -18,9 +18,9 @@ monitor-config.json schema example:
   ]
 }
 
-The monitor does NOT make real metric queries — it simulates a threshold
-breach by comparing a configurable simulated_value field (default 0) against
-the threshold.  Replace _poll_check() with real metric fetching as needed.
+Explicit breaches (simulated_value >= threshold) are always detected.
+Probabilistic breach detection (for local dev, when no simulated_value is
+configured) is a stub — see _probabilistic_breach() below.
 """
 
 from __future__ import annotations
@@ -31,9 +31,7 @@ import os
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-import random
-
-import app.agent_log as agent_log
+import pre.agent_log as agent_log
 
 # Path to the config file — relative to repo root
 _CONFIG_PATH = Path(__file__).parent.parent / "monitor-config.json"
@@ -54,17 +52,37 @@ def _load_config() -> dict[str, Any]:
         return json.load(fh)
 
 
+def _probabilistic_breach(check: dict[str, Any]) -> bool:
+    """Probabilistic breach detection used when a check has no real
+    simulated_value signal, for local dev without a live metric source.
+
+    TODO(pre.telemetry.metrics_client): replace this stub with a real
+    metric fetch against the check's configured source (e.g. Prometheus
+    query for the service+metric named in data/taxonomy.yaml `sli_map`)
+    and compare the live value against `threshold`.
+    """
+    raise NotImplementedError(
+        "Probabilistic breach detection is a stub. Implement "
+        "pre.telemetry.metrics_client to fetch the real metric for this "
+        "check and compare it against `threshold`, then call it from here."
+    )
+
+
 async def _poll_check(check: dict[str, Any], callback: IncidentCallback) -> None:
     """Evaluate a single check and invoke *callback* if the threshold is breached.
 
-    A check fires when either:
-      - simulated_value >= threshold  (explicit config-driven breach), or
-      - random.random() < BREACH_PROBABILITY  (probabilistic — for local dev)
+    Explicit config-driven breach (simulated_value >= threshold) is checked
+    first and always works. Only when that doesn't fire do we fall back to
+    probabilistic detection, which is currently a stub (see
+    _probabilistic_breach) pending a real metrics client.
     """
     threshold = float(check.get("threshold", 1.0))
     simulated_value = float(check.get("simulated_value", 0.0))
 
-    breached = simulated_value >= threshold or random.random() < BREACH_PROBABILITY
+    breached = simulated_value >= threshold
+    if not breached:
+        breached = _probabilistic_breach(check)
+
     if breached:
         alert = {
             "name": check.get("name", "unknown"),

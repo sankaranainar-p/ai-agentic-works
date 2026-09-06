@@ -1,62 +1,47 @@
 """
-app/main.py — FastAPI application for the AI Payment Reliability Engine.
+pre/agent_loop.py — Core 5-layer agent loop for the AI Payment
+Reliability Engine, extracted from pre/main.py so the FastAPI layer
+(pre/api/) stays thin.
 
 5-layer agent loop (per incident):
   1. Classify   — ML + LLM ensemble
   2. RCA        — Ollama → template → default
   3. Remediate  — category-specific handler + Slack/PagerDuty
-  4. Verify     — wait VERIFY_WAIT_SECONDS, re-poll simulated metrics
+  4. Verify     — wait VERIFY_WAIT_SECONDS, re-poll metrics
   5. Log        — persist full incident record in agent_log
-
-Endpoints:
-  GET  /health
-  POST /trigger
-  GET  /incidents
-  GET  /agent-log
-  GET  /agent-log/stream   (SSE)
-  GET  /stats
-  GET  /scenarios
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from typing import Any
 
-from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-
-load_dotenv()
-
-import app.agent_log as agent_log
-import app.monitor as monitor
-from app.auth import verify_api_key
-from app.classifier.llm import classify_with_llm
-from app.database import get_incidents, get_stats, init_db, save_incident
-from app.classifier.model import ROUTE_TO, RUNBOOKS, SEVERITY_MAP, get_classifier
-from app.rca import generate_rca
-from app.remediation.dispatcher import dispatch
-from app.verification import verify
+import pre.agent_log as agent_log
+from pre.classifier.llm import classify_with_llm
+from pre.classifier.model import ROUTE_TO, RUNBOOKS, get_classifier
+from pre.database import save_incident
+from pre.rca import generate_rca
+from pre.remediation.dispatcher import dispatch
+from pre.verification import verify
 
 # ---------------------------------------------------------------------------
-# In-memory incident store
+# In-memory incident store (most-recent-50, mirrors SQLite persistence)
 # ---------------------------------------------------------------------------
 
 _incidents: list[dict[str, Any]] = []
 
 
+def incidents_processed_count() -> int:
+    return len(_incidents)
+
+
 # ---------------------------------------------------------------------------
-# Lifespan
+# Seed scenarios (run once at startup to populate the demo UI)
 # ---------------------------------------------------------------------------
 
-_SEED_SCENARIOS = [
+SEED_SCENARIOS = [
     ("HTTP 500 error rate at 9.2% on /api/v2/payments",                            "Datadog"),
     ("DDoS attack: 900,000 requests/min from 52 countries targeting /api/payment", "CloudWatch"),
     ("Service availability dropped to 96.8%, below 99.9% SLA threshold",           "Prometheus"),
@@ -70,65 +55,24 @@ _SEED_SCENARIOS = [
 ]
 
 
-async def _seed_incidents() -> None:
-    agent_log.append({"event": "seeding_started", "count": len(_SEED_SCENARIOS)})
-    for alert_text, source in _SEED_SCENARIOS:
+async def seed_incidents() -> None:
+    """Process the demo seed scenarios once, spaced 2s apart, so the demo
+    UI has data without blocking startup."""
+    agent_log.append({"event": "seeding_started", "count": len(SEED_SCENARIOS)})
+    for alert_text, source in SEED_SCENARIOS:
         try:
-            await _process_incident(alert_text, source)
+            await process_incident(alert_text, source)
         except Exception as exc:
             agent_log.append({"event": "seeding_error", "error": str(exc)})
         await asyncio.sleep(2)
-    agent_log.append({"event": "seeding_complete", "count": len(_SEED_SCENARIOS)})
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Initialise SQLite
-    await init_db()
-    agent_log.append({"event": "startup", "step": "db_ready"})
-
-    # Pre-warm the ML classifier (fits on first call — do it at startup)
-    agent_log.append({"event": "startup", "step": "pre_warming_classifier"})
-    clf = get_classifier()
-    agent_log.append({"event": "startup", "step": "classifier_ready"})
-
-    # Start background monitor
-    await monitor.start(_handle_monitor_alert)
-    agent_log.append({"event": "startup", "step": "monitor_started"})
-
-    # Seed demo incidents in the background so startup is non-blocking
-    asyncio.create_task(_seed_incidents())
-    agent_log.append({"event": "startup", "step": "seeding_scheduled"})
-
-    yield
-
-    await monitor.stop()
-    agent_log.append({"event": "shutdown"})
-
-
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
-
-app = FastAPI(
-    title="AI Payment Reliability Engine",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    agent_log.append({"event": "seeding_complete", "count": len(SEED_SCENARIOS)})
 
 
 # ---------------------------------------------------------------------------
 # Core 5-layer agent loop
 # ---------------------------------------------------------------------------
 
-async def _process_incident(alert_text: str, source: str) -> dict[str, Any]:
+async def process_incident(alert_text: str, source: str) -> dict[str, Any]:
     incident_id = str(uuid.uuid4())[:8]
     started_at = datetime.now(timezone.utc).isoformat()
 
@@ -242,90 +186,9 @@ async def _process_incident(alert_text: str, source: str) -> dict[str, Any]:
     return incident
 
 
-async def _handle_monitor_alert(alert: dict[str, Any]) -> None:
+async def handle_monitor_alert(alert: dict[str, Any]) -> None:
     """Callback invoked by the monitor when a threshold is breached."""
-    await _process_incident(
+    await process_incident(
         alert_text=alert.get("alert_text", "Monitor threshold breached"),
         source=alert.get("source", "monitor"),
     )
-
-
-# ---------------------------------------------------------------------------
-# Request/response models
-# ---------------------------------------------------------------------------
-
-class TriggerRequest(BaseModel):
-    alert_text: str
-    source: str = "api"
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-
-@app.get("/health")
-async def health() -> dict[str, Any]:
-    return {
-        "status": "ok",
-        "incidents_processed": len(_incidents),
-        "log_entries": agent_log.count(),
-    }
-
-
-@app.post("/trigger", dependencies=[Depends(verify_api_key)])
-async def trigger(req: TriggerRequest) -> dict[str, Any]:
-    if not req.alert_text.strip():
-        raise HTTPException(status_code=422, detail="alert_text must not be empty")
-    incident = await _process_incident(req.alert_text, req.source)
-    return incident
-
-
-@app.get("/incidents", dependencies=[Depends(verify_api_key)])
-async def list_incidents(limit: int = 50) -> list[dict[str, Any]]:
-    return await get_incidents(limit)
-
-
-@app.get("/agent-log", dependencies=[Depends(verify_api_key)])
-async def get_agent_log(n: int = 100) -> list[dict[str, Any]]:
-    return agent_log.get_recent(n)
-
-
-@app.get("/agent-log/stream", dependencies=[Depends(verify_api_key)])
-async def stream_agent_log() -> StreamingResponse:
-    """Server-Sent Events stream of new log entries."""
-
-    async def _generate() -> AsyncGenerator[str, None]:
-        cursor = agent_log.count()
-        while True:
-            current = agent_log.count()
-            if current > cursor:
-                entries = agent_log.get_recent(current - cursor)
-                for entry in entries:
-                    yield f"data: {json.dumps(entry)}\n\n"
-                cursor = current
-            await asyncio.sleep(0.5)
-
-    return StreamingResponse(_generate(), media_type="text/event-stream")
-
-
-@app.get("/stats", dependencies=[Depends(verify_api_key)])
-async def stats() -> dict[str, Any]:
-    return await get_stats()
-
-
-@app.get("/scenarios")
-async def scenarios() -> list[dict[str, str]]:
-    """Return sample alert texts for manual testing."""
-    return [
-        {"name": "HTTP 500 spike",          "alert_text": "Payment service 500 error rate 8% on /api/checkout"},
-        {"name": "DDoS attack",             "alert_text": "WAF triggered: 500k requests/min flood from botnet IPs"},
-        {"name": "Availability drop",       "alert_text": "Checkout service availability dropped to 98.1% — health checks failing"},
-        {"name": "Performance degradation", "alert_text": "p99 latency 4500ms on payment processing API"},
-        {"name": "Database issue",          "alert_text": "PostgreSQL connection pool exhausted, max_connections reached"},
-        {"name": "Auth failure",            "alert_text": "SSL certificate expiring in 12 hours for payment-gateway.example.com"},
-        {"name": "Network issue",           "alert_text": "Packet loss 15% between payment service and database host"},
-        {"name": "Data pipeline",           "alert_text": "Kafka consumer lag 800k messages on payment-events topic"},
-        {"name": "Infrastructure",          "alert_text": "Payment service pods crashlooping in production namespace"},
-        {"name": "Security alert",          "alert_text": "SQL injection attempt detected on payment API endpoint"},
-        {"name": "Unknown",                 "alert_text": "Unclassified anomaly detected in payment platform"},
-    ]

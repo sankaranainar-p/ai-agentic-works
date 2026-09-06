@@ -1,5 +1,5 @@
 """
-app/remediation/dispatcher.py — Routes alerts to the correct handler.
+pre/remediation/dispatcher.py — Routes alerts to the correct handler.
 
 Integrations:
   - Slack  (slack-sdk)    — real notification for SEV-1; requires SLACK_BOT_TOKEN + SLACK_CHANNEL
@@ -14,34 +14,40 @@ from typing import Any
 
 import httpx
 
-import app.agent_log as agent_log
-from app.remediation import RemediationResult
-from app.remediation.handlers import (
-    handle_authentication,
-    handle_availability_drop,
-    handle_data_pipeline,
-    handle_database,
-    handle_ddos_attack,
-    handle_http_500_spike,
-    handle_infrastructure,
-    handle_network,
-    handle_performance_degradation,
-    handle_security,
+import pre.agent_log as agent_log
+from pre.remediation import RemediationResult
+from pre.remediation.handlers import (
+    handle_api_compatibility_issue,
+    handle_concurrency_issue,
+    handle_configuration_error,
+    handle_cpu,
+    handle_delay,
+    handle_dependency_failure,
+    handle_disk,
+    handle_exception_handling_error,
+    handle_logic_error,
+    handle_loss,
+    handle_memory,
+    handle_performance_bottleneck,
+    handle_socket,
     handle_unknown,
 )
 
 _HANDLERS = {
-    "http_500_spike":         handle_http_500_spike,
-    "ddos_attack":            handle_ddos_attack,
-    "availability_drop":      handle_availability_drop,
-    "performance_degradation":handle_performance_degradation,
-    "database":               handle_database,
-    "authentication":         handle_authentication,
-    "network":                handle_network,
-    "data_pipeline":          handle_data_pipeline,
-    "infrastructure":         handle_infrastructure,
-    "security":               handle_security,
-    "unknown":                handle_unknown,
+    "cpu":                       handle_cpu,
+    "memory":                    handle_memory,
+    "disk":                      handle_disk,
+    "socket":                    handle_socket,
+    "delay":                     handle_delay,
+    "loss":                      handle_loss,
+    "logic_error":               handle_logic_error,
+    "concurrency_issue":         handle_concurrency_issue,
+    "api_compatibility_issue":   handle_api_compatibility_issue,
+    "performance_bottleneck":    handle_performance_bottleneck,
+    "exception_handling_error":  handle_exception_handling_error,
+    "configuration_error":       handle_configuration_error,
+    "dependency_failure":        handle_dependency_failure,
+    "unknown":                   handle_unknown,
 }
 
 

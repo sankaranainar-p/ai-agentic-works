@@ -1,10 +1,15 @@
 """
-app/classifier/llm.py — LLM-based payment alert classifier.
+pre/classifier/llm.py — LLM-based payment alert classifier.
 
 Provider priority:
   1. Groq  (cloud)  — when GROQ_API_KEY is set
   2. Ollama (local) — when OLLAMA_BASE_URL is set
   3. None           — ML-only fallback
+
+The system prompt's allowed category list is generated from the shared
+fault taxonomy in data/taxonomy.yaml (via pre/classifier/taxonomy.py), the
+same source pre/classifier/model.py trains against. This guarantees the
+LLM can never name a category the ML classifier does not also support.
 
 Environment variables:
     GROQ_API_KEY      Groq API key  (activates Groq provider)
@@ -20,6 +25,8 @@ import os
 from typing import Optional
 
 import httpx
+
+from pre.classifier.taxonomy import UNKNOWN_CATEGORY, all_categories
 
 
 # ---------------------------------------------------------------------------
@@ -70,27 +77,35 @@ class MLResult:
 
 
 # ---------------------------------------------------------------------------
-# Normalisation tables
+# Normalisation tables — sourced from the shared taxonomy
 # ---------------------------------------------------------------------------
 
-CATEGORIES = {
-    "http_500_spike", "ddos_attack", "availability_drop",
-    "performance_degradation", "database", "authentication", "network", "unknown",
-}
+CATEGORIES = set(all_categories())
 
 _CATEGORY_ALIASES: dict[str, str] = {
-    "error_rate": "http_500_spike", "500_error": "http_500_spike", "http_error": "http_500_spike",
-    "ddos": "ddos_attack", "dos_attack": "ddos_attack", "denial_of_service": "ddos_attack",
-    "availability": "availability_drop", "service_down": "availability_drop", "outage": "availability_drop",
-    "perf": "performance_degradation", "latency": "performance_degradation", "slow": "performance_degradation",
-    "db": "database", "database_error": "database",
+    "cpu_saturation": "cpu", "high_cpu": "cpu",
+    "memory_leak": "memory", "oom": "memory", "out_of_memory": "memory",
+    "disk_saturation": "disk", "disk_exhaustion": "disk",
+    "socket_exhaustion": "socket", "connection_exhaustion": "socket",
+    "network_delay": "delay", "latency": "delay", "latency_degradation": "delay",
+    "packet_loss": "loss",
+    "logic_bug": "logic_error", "bug": "logic_error",
+    "race_condition": "concurrency_issue", "deadlock": "concurrency_issue",
+    "api_mismatch": "api_compatibility_issue", "version_mismatch": "api_compatibility_issue",
+    "bottleneck": "performance_bottleneck", "slow_query": "performance_bottleneck",
+    "unhandled_exception": "exception_handling_error", "crash": "exception_handling_error",
+    "misconfiguration": "configuration_error", "config_error": "configuration_error",
+    "upstream_failure": "dependency_failure", "third_party_outage": "dependency_failure",
     **{c: c for c in CATEGORIES},
 }
 
 SEVERITY_MAP: dict[str, str] = {
-    "http_500_spike": "SEV-1", "ddos_attack": "SEV-1", "availability_drop": "SEV-1",
-    "performance_degradation": "SEV-2", "database": "SEV-2", "authentication": "SEV-2",
-    "network": "SEV-3", "unknown": "SEV-3",
+    "cpu": "SEV-2", "memory": "SEV-2", "disk": "SEV-2", "socket": "SEV-2",
+    "delay": "SEV-2", "loss": "SEV-3",
+    "logic_error": "SEV-1", "concurrency_issue": "SEV-2",
+    "api_compatibility_issue": "SEV-2", "performance_bottleneck": "SEV-3",
+    "exception_handling_error": "SEV-1", "configuration_error": "SEV-2",
+    "dependency_failure": "SEV-1", UNKNOWN_CATEGORY: "SEV-3",
 }
 
 _SEVERITY_ALIASES: dict[str, str] = {
@@ -113,38 +128,49 @@ def _normalize_severity(raw: str, category: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# System prompt
+# System prompt — category list generated from data/taxonomy.yaml so the
+# LLM can never name a fault_class the ML classifier doesn't also support.
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are a payment reliability expert. Classify the given payment system alert.
+def _build_system_prompt() -> str:
+    categories = ", ".join(all_categories())
+    return f"""You are a payment reliability expert. Classify the given payment system alert.
 
 Respond with ONLY a valid JSON object in this exact format:
-{
-  "category": "<one of: http_500_spike, ddos_attack, availability_drop, performance_degradation, database, authentication, network, unknown>",
+{{
+  "category": "<one of: {categories}>",
   "severity": "<one of: SEV-1, SEV-2, SEV-3, SEV-4>",
   "confidence": <float between 0.0 and 1.0>,
   "reasoning": "<one sentence explaining the classification>"
-}
+}}
 
 Category guidance:
-- ddos_attack: volumetric attacks, request floods, botnet traffic, requests/min spikes, WAF triggers — NOT generic network issues
-- http_500_spike: elevated HTTP 5xx error rates, server-side failures
-- availability_drop: service unreachable, uptime percentage drops, health-check failures
-- performance_degradation: elevated latency, slow responses, throughput reduction
-- database: DB connection errors, query failures, replication lag
-- authentication: auth failures, token errors, certificate issues
-- network: packet loss, DNS failures, generic connectivity issues (not volumetric attacks)
+- cpu: sustained CPU saturation / throttling on payment services
+- memory: memory leaks, OOM kills, heap pressure
+- disk: disk space exhaustion, disk I/O saturation
+- socket: connection pool / file-descriptor / socket exhaustion
+- delay: elevated latency, slow responses, injected network delay
+- loss: packet loss, dropped connections
+- logic_error: incorrect business logic, elevated HTTP 5xx from bad code paths
+- concurrency_issue: deadlocks, race conditions, duplicate processing
+- api_compatibility_issue: version/schema mismatches between services
+- performance_bottleneck: throughput degradation, consumer lag, slow queries
+- exception_handling_error: unhandled/uncaught exceptions crashing a service
+- configuration_error: misconfiguration, expired certs, bad env vars
+- dependency_failure: upstream/downstream/third-party service unavailable
 - unknown: cannot determine from available information
 
 Severity rules (apply the FIRST matching rule):
-- SEV-1: ddos_attack (always)
-- SEV-1: availability_drop AND alert mentions availability below 99.9%
-- SEV-1: http_500_spike AND alert mentions error rate above 5%
-- SEV-2: http_500_spike, availability_drop, database, authentication (when SEV-1 conditions not met)
-- SEV-3: performance_degradation, infrastructure, network
-- SEV-3: default when uncertain
+- SEV-1: logic_error, exception_handling_error, dependency_failure (always)
+- SEV-1: delay AND alert mentions latency above 3000ms
+- SEV-1: loss AND alert mentions packet loss above 10%
+- SEV-2: cpu, memory, disk, socket, concurrency_issue, api_compatibility_issue, configuration_error
+- SEV-3: performance_bottleneck, loss, default when uncertain
 
 Do not include any text outside the JSON object."""
+
+
+SYSTEM_PROMPT = _build_system_prompt()
 
 
 # ---------------------------------------------------------------------------

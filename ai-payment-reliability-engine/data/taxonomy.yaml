@@ -1,0 +1,78 @@
+# data/taxonomy.yaml — Shared fault/SLI taxonomy for the AI Payment
+# Reliability Engine.
+#
+# This file is the single source of truth for:
+#   1. fault_class  — the set of injectable/observable fault types, drawn
+#      only from the ground-truth labels used by RCAEval (RE1/RE2 resource
+#      + network faults, RE3 code-level faults) and OpenRCA (code/config
+#      level root causes on enterprise telemetry).
+#   2. payment_sli   — the payment-domain service level indicators that a
+#      fault is ultimately judged against.
+#   3. sli_map       — for each target system, maps a service+metric pair
+#      to the payment_sli it feeds. Used to translate a fault injected in
+#      a benchmark system into the SLI the pipeline reports on.
+#
+# Both the ML classifier (pre/classifier/model.py) and the LLM classifier
+# (pre/classifier/llm.py) load `fault_class` and `payment_sli` from this
+# file via pre/classifier/taxonomy.py, so the LLM prompt can never name a
+# category the ML side does not also support.
+
+fault_class:
+  # --- RCAEval RE1/RE2 resource faults ---
+  - cpu
+  - memory
+  - disk
+  - socket
+  # --- RCAEval RE1/RE2 network faults ---
+  - delay
+  - loss
+  # --- RCAEval RE3 code-level faults (F1-F5) ---
+  - logic_error
+  - concurrency_issue
+  - api_compatibility_issue
+  - performance_bottleneck
+  - exception_handling_error
+  # --- OpenRCA code/config root-cause classes ---
+  - configuration_error
+  - dependency_failure
+
+payment_sli:
+  - authorisation_success_rate
+  - checkout_latency_p99
+  - settlement_lag
+  - queue_lag
+  - availability
+
+# ---------------------------------------------------------------------------
+# Per-system service+metric -> SLI mapping
+# ---------------------------------------------------------------------------
+sli_map:
+  online_boutique:
+    checkoutservice.request_latency_p99: checkout_latency_p99
+    paymentservice.error_rate: authorisation_success_rate
+    frontend.availability: availability
+    cartservice.request_latency_p99: checkout_latency_p99
+
+  sock_shop:
+    payment.request_latency_p99: checkout_latency_p99
+    payment.error_rate: authorisation_success_rate
+    orders.queue_depth: queue_lag
+    front-end.availability: availability
+
+  train_ticket:
+    ts-payment-service.error_rate: authorisation_success_rate
+    ts-order-service.request_latency_p99: checkout_latency_p99
+    ts-payment-service.availability: availability
+    ts-order-service.queue_depth: queue_lag
+
+  openrca_bank:
+    payment-gateway.settlement_lag_seconds: settlement_lag
+    payment-gateway.auth_success_rate: authorisation_success_rate
+    core-banking.availability: availability
+    core-banking.transaction_queue_depth: queue_lag
+
+  otel_demo:
+    checkout.request_latency_p99: checkout_latency_p99
+    payment.error_rate: authorisation_success_rate
+    frontend.availability: availability
+    kafka-queue.consumer_lag: queue_lag

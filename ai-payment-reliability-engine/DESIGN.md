@@ -39,7 +39,7 @@ Alert ingested
 
 ## LLM Provider Priority
 
-Both the classifier (`app/classifier/llm.py`) and RCA generator (`app/rca.py`)
+Both the classifier (`pre/classifier/llm.py`) and RCA generator (`pre/rca.py`)
 follow the same provider selection order:
 
 1. **Groq** (cloud) — when `GROQ_API_KEY` is set  
@@ -77,9 +77,13 @@ follow the same provider selection order:
 ## Module Layout
 
 ```
-app/
+pre/
 ├── __init__.py
-├── main.py                 FastAPI app, 5-layer agent loop, all endpoints
+├── main.py                 Thin FastAPI app: wiring, lifespan, CORS, router mount
+├── agent_loop.py           5-layer agent loop (classify → RCA → remediate → verify → log)
+├── api/
+│   ├── __init__.py
+│   └── routes.py           All HTTP route handlers (thin; delegate to agent_loop)
 ├── rca.py                  Root cause analysis generator
 ├── database.py             Async SQLite persistence (aiosqlite)
 ├── agent_log.py            Thread-safe in-memory event log
@@ -87,11 +91,23 @@ app/
 ├── verification.py         Post-remediation verification
 ├── classifier/
 │   ├── __init__.py
+│   ├── taxonomy.py         Shared fault taxonomy loader (data/taxonomy.yaml)
 │   ├── llm.py              Groq/Ollama LLM classifier
-│   └── model.py            scikit-learn ML classifier (TF-IDF + LinearSVC)
+│   └── model.py            scikit-learn ML classifier (TF-IDF + LinearSVC),
+│                            persisted to models/ with a fixed random seed
 └── remediation/
     ├── __init__.py          RemediationResult dataclass
     ├── dispatcher.py        Routes to handler, fires Slack/PagerDuty
     └── handlers/
-        └── __init__.py      11 category-specific async handlers
+        └── __init__.py      One async handler per fault_class category
+
+data/
+└── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
+
+models/
+└── ml_classifier_v1.joblib  Persisted trained ML pipeline (fixed seed)
+
+tests/
+├── test_health.py           Smoke test: app starts, GET /health succeeds
+└── test_taxonomy.py         Validates data/taxonomy.yaml sli_map integrity
 ```
