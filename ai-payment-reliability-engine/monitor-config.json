@@ -1,25 +1,25 @@
 {
   "checks": [
     {
-      "name": "checkout_500_error_rate",
+      "name": "payment_cpu_saturation",
       "source": "prometheus",
-      "alert_text": "HTTP 500 error rate 8% on /api/checkout — above 5% threshold",
+      "alert_text": "CPU utilization 98% sustained on payment service nodes",
       "threshold": 0.05,
       "simulated_value": 0.0,
       "interval_seconds": 30
     },
     {
-      "name": "ddos_request_flood",
-      "source": "waf",
-      "alert_text": "WAF triggered: requests/min spike 450k — possible botnet flood",
-      "threshold": 100000,
-      "simulated_value": 0,
-      "interval_seconds": 15
+      "name": "payment_memory_leak",
+      "source": "prometheus",
+      "alert_text": "Memory usage climbing steadily, OOM killed payment worker pods",
+      "threshold": 0.05,
+      "simulated_value": 0.0,
+      "interval_seconds": 30
     },
     {
-      "name": "payment_availability",
+      "name": "payment_availability_drop",
       "source": "healthcheck",
-      "alert_text": "Payment service availability dropped to 98.5% — below 99.9% SLA threshold",
+      "alert_text": "Upstream fraud detection service unresponsive, payment requests blocked",
       "threshold": 99.9,
       "simulated_value": 0,
       "interval_seconds": 20
@@ -35,15 +35,15 @@
     {
       "name": "db_connection_pool_used_pct",
       "source": "prometheus",
-      "alert_text": "PostgreSQL connection pool at 95% capacity — max_connections approaching",
+      "alert_text": "PostgreSQL connection pool exhausted, max_connections reached",
       "threshold": 90,
       "simulated_value": 0,
       "interval_seconds": 30
     },
     {
-      "name": "auth_failure_rate",
+      "name": "payment_certificate_expiry",
       "source": "prometheus",
-      "alert_text": "OAuth token validation failure rate 12% — identity provider degraded",
+      "alert_text": "SSL certificate expiring in 12 hours for payment-gateway.example.com",
       "threshold": 0.05,
       "simulated_value": 0.0,
       "interval_seconds": 30

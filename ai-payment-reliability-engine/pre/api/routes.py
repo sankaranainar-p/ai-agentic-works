@@ -81,17 +81,25 @@ async def stats() -> dict[str, Any]:
 
 @router.get("/scenarios")
 async def scenarios() -> list[dict[str, str]]:
-    """Return sample alert texts for manual testing."""
+    """Return sample alert texts for manual testing.
+
+    Each scenario is worded to classify unambiguously into one fault_class
+    from data/taxonomy.yaml (see pre/classifier/taxonomy.py); the "name"
+    field is a human-readable label, not the fault_class value itself.
+    """
     return [
-        {"name": "HTTP 500 spike",          "alert_text": "Payment service 500 error rate 8% on /api/checkout"},
-        {"name": "DDoS attack",             "alert_text": "WAF triggered: 500k requests/min flood from botnet IPs"},
-        {"name": "Availability drop",       "alert_text": "Checkout service availability dropped to 98.1% — health checks failing"},
-        {"name": "Performance degradation", "alert_text": "p99 latency 4500ms on payment processing API"},
-        {"name": "Database issue",          "alert_text": "PostgreSQL connection pool exhausted, max_connections reached"},
-        {"name": "Auth failure",            "alert_text": "SSL certificate expiring in 12 hours for payment-gateway.example.com"},
-        {"name": "Network issue",           "alert_text": "Packet loss 15% between payment service and database host"},
-        {"name": "Data pipeline",           "alert_text": "Kafka consumer lag 800k messages on payment-events topic"},
-        {"name": "Infrastructure",          "alert_text": "Payment service pods crashlooping in production namespace"},
-        {"name": "Security alert",          "alert_text": "SQL injection attempt detected on payment API endpoint"},
-        {"name": "Unknown",                 "alert_text": "Unclassified anomaly detected in payment platform"},
+        {"name": "CPU saturation",         "alert_text": "CPU utilization 98% sustained on payment service nodes"},
+        {"name": "Memory leak",            "alert_text": "Memory usage climbing steadily, OOM killed payment worker pods"},
+        {"name": "Disk exhaustion",        "alert_text": "Disk usage 96% critical on payment database volume"},
+        {"name": "Socket exhaustion",      "alert_text": "PostgreSQL connection pool exhausted, max_connections reached"},
+        {"name": "Latency degradation",    "alert_text": "p99 latency 4500ms on payment processing API"},
+        {"name": "Packet loss",            "alert_text": "Packet loss 15% between payment service and database host"},
+        {"name": "Logic error",            "alert_text": "Payment service 500 error rate 8% on /api/checkout"},
+        {"name": "Concurrency issue",      "alert_text": "Deadlock detected in payment order transaction processing"},
+        {"name": "API compatibility",      "alert_text": "Payment gateway API version mismatch causing request failures"},
+        {"name": "Performance bottleneck", "alert_text": "Kafka consumer lag 800k messages on payment-events topic"},
+        {"name": "Exception handling",     "alert_text": "Unhandled exception crashing payment worker process repeatedly"},
+        {"name": "Configuration error",    "alert_text": "SSL certificate expiring in 12 hours for payment-gateway.example.com"},
+        {"name": "Dependency failure",     "alert_text": "Upstream fraud detection service unresponsive, payment requests blocked"},
+        {"name": "Unknown",                "alert_text": "Unclassified anomaly detected in payment platform"},
     ]

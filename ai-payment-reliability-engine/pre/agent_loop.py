@@ -42,16 +42,16 @@ def incidents_processed_count() -> int:
 # ---------------------------------------------------------------------------
 
 SEED_SCENARIOS = [
-    ("HTTP 500 error rate at 9.2% on /api/v2/payments",                            "Datadog"),
-    ("DDoS attack: 900,000 requests/min from 52 countries targeting /api/payment", "CloudWatch"),
-    ("Service availability dropped to 96.8%, below 99.9% SLA threshold",           "Prometheus"),
+    ("CPU utilization 98% sustained on payment service nodes",                     "Datadog"),
+    ("Memory usage climbing steadily, OOM killed payment worker pods",             "CloudWatch"),
+    ("Disk usage 96% critical on payment database volume",                        "Prometheus"),
     ("PostgreSQL connection pool exhausted: 500/500 connections in use",            "Datadog"),
     ("p99 latency on /api/payments degraded from 200ms to 3,100ms",                "Dynatrace"),
     ("Kafka consumer group payment-processor lag at 2.4M messages",                "Splunk"),
-    ("Brute force attack: 1,200 failed login attempts from 45.33.22.11",           "PagerDuty"),
-    ("Kubernetes node not-ready, 3 pods pending on infra cluster",                 "Grafana"),
+    ("Deadlock detected in payment order transaction processing",                  "PagerDuty"),
+    ("Payment gateway API version mismatch causing request failures",              "Grafana"),
     ("Network packet loss 3.2% between us-east-1 and eu-west-1",                  "Grafana"),
-    ("p99 latency spike to 3,200ms on checkout service, SLO breach imminent",      "Dynatrace"),
+    ("Unhandled exception crashing payment worker process repeatedly",             "Dynatrace"),
 ]
 
 
