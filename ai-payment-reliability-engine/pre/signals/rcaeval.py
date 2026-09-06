@@ -121,12 +121,24 @@ def _load_metrics(data_csv: Path) -> dict[str, MetricSeries]:
     silently dropped). Some RCAEval data.csv files carry trailing all-NaN
     rows (observed in the wild, e.g. RE1-OB checkoutservice_cpu/4); rows with
     a NaN `time` are dropped since they carry no usable timestamp.
+
+    Missing values within a column are forward-filled then any remaining
+    leading NaNs are filled with 0, matching RCAEval's own
+    RCAEval.utility.read_data preprocessing (`data.ffill().fillna(0)`)
+    exactly. This matters: a naive fillna(0) with no forward-fill silently
+    replaces "value unknown, carry the last observation" with "value is
+    literally zero", which changes anomaly-detection results — verified via
+    tests/test_b2_rcaeval_parity.py, which failed with an earlier
+    fillna(0)-only version of this function despite reproducing the
+    published table's row/column counts exactly.
     """
     df = pd.read_csv(data_csv)
     df = df.loc[:, ~df.columns.duplicated()]
     if "time.1" in df.columns:
         df = df.drop(columns=["time.1"])
     df = df.dropna(subset=["time"])
+    df = df.replace([float("inf"), float("-inf")], pd.NA)
+    df = df.ffill().fillna(0.0)
 
     times = tuple(int(t) for t in df["time"])
     metrics: dict[str, MetricSeries] = {}
@@ -142,7 +154,7 @@ def _load_metrics(data_csv: Path) -> dict[str, MetricSeries]:
             svc, metric = "cluster", col
 
         key = f"{svc}:{metric}"
-        values = tuple(float(v) for v in df[col].fillna(0.0))
+        values = tuple(float(v) for v in df[col])
         metrics[key] = MetricSeries(key=key, times=times, values=values)
 
     return metrics
