@@ -1,0 +1,14 @@
+# bench/configs/re1_ob_smoke.yaml — smallest possible config, driven off
+# the trimmed fixture used by tests/test_rcaeval_adapter.py. Intended for
+# CI smoke tests of the harness itself, not for real benchmark numbers.
+
+run_id: re1_ob_smoke
+adapter:
+  name: rcaeval
+  root: tests/fixtures/rcaeval
+  dataset: RE1-OB
+system_variant: full   # full | A1 | A2 | A3 | A4 | A5 | A6 (ablations)
+baselines:
+  - B1
+repeats: 1
+output_dir: results

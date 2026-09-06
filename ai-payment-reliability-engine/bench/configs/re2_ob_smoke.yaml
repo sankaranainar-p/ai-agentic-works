@@ -1,0 +1,14 @@
+# bench/configs/re2_ob_smoke.yaml — multi-baseline config against the
+# RE2-OB fixture (metrics+logs+traces), for harness smoke testing.
+
+run_id: re2_ob_smoke
+adapter:
+  name: rcaeval
+  root: tests/fixtures/rcaeval
+  dataset: RE2-OB
+system_variant: full
+baselines:
+  - B1
+  - B3
+repeats: 1
+output_dir: results

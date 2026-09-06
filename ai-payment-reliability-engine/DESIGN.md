@@ -126,6 +126,30 @@ pre/signals/                 Adapters normalising external benchmark
 └── rcaeval.py                 invariant: GroundTruth is never reachable
                                 from a FailureCase handed to an agent)
 
+bench/                       Benchmark harness (A14, PROTOCOL.md RQ1-5)
+├── __init__.py
+├── run_benchmark.py          YAML-config-driven harness: selects adapter,
+│                             system_variant (full/A1-A6 ablations),
+│                             baselines, repeats; writes
+│                             results/<run_id>/{manifest.json,metrics.csv}
+├── metrics.py                macro_f1, ECE, Brier, AC@k, Avg@5
+│                             (RCAEval-compatible), faithfulness
+├── configs/                  YAML configs (see re1_ob_smoke.yaml for
+│                             the minimal harness-smoke-test shape)
+└── baselines/
+    ├── __init__.py            BASELINE_IDS = B1..B5
+    ├── rules.py               B1: n-sigma deviation ranking, no learning
+    ├── rcaeval_baseline.py    B2: wraps RCAEval's own BARO baseline;
+    │                          verified to reproduce the published
+    │                          RCAEval README Avg@5 table on RE2-TT
+    │                          exactly (see tests/test_b2_rcaeval_parity.py)
+    ├── ml_triage.py           B3: repurposes pre.classifier.model for
+    │                          service-level ranking
+    ├── single_prompt_llm.py   B4: one-shot LLM ranking prompt
+    └── openrca_agent.py       B5: OpenRCA's own scoring algorithm,
+                               ported and verified against OpenRCA's
+                               archived Bank predictions
+
 data/
 ├── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
 ├── scripts/
@@ -146,5 +170,18 @@ tests/
 │                             trimmed fixture in tests/fixtures/rcaeval/
 ├── test_rcaeval_downloader.py  Tests download_rcaeval.py's checksum
 │                             verification without network access
-└── fixtures/rcaeval/        Trimmed RE1-OB + RE2-OB cases (~420KB total)
+├── test_rcaeval_metrics_file_resolution.py  Regression test: RE2 uses
+│                             simple_metrics.csv, not data.csv
+├── test_bench_metrics.py    Unit tests for bench/metrics.py
+├── test_b2_rcaeval_parity.py  THE gate: B2 must match RCAEval's published
+│                             RE2-TT table. Requires a separate Python
+│                             3.12 venv with RCAEval installed and the
+│                             real 2.8GB RE2-TT dataset; skipped by
+│                             default (see its module docstring)
+├── test_b5_openrca_agent.py  B5 exact-parity check against OpenRCA's own
+│                             archived Bank predictions/scores
+├── test_run_benchmark.py    Tests bench/run_benchmark.py's harness
+└── fixtures/
+    ├── rcaeval/              Trimmed RE1-OB + RE2-OB cases (~420KB total)
+    └── openrca/              OpenRCA's full archived agent-Bank.csv (88KB)
 ```

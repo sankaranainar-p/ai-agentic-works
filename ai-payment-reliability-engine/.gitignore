@@ -2,6 +2,7 @@ data/*.db
 data/rcaeval/
 !data/taxonomy.yaml
 !data/scripts/
+results/
 __pycache__/
 *.pyc
 .venv/
