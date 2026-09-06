@@ -82,13 +82,13 @@ def test_re2_ob_ground_truth_matches_directory_encoding():
     assert gt.case_id == "RE2-OB_checkoutservice_delay_1"
     assert gt.root_cause_service == "checkoutservice"
     assert gt.fault_type == "delay"
-    assert gt.inject_time == 1705354566
+    assert gt.inject_time == 1705666511
 
 
 def test_re2_ob_metric_key_count():
     fc, gt = _load("RE2-OB")[0]
-    # Fixture trimmed metrics.csv has 72 svc:metric series (73 columns - time).
-    assert len(fc.metrics) == 72
+    # Fixture trimmed simple_metrics.csv has 75 svc:metric series (76 columns - time).
+    assert len(fc.metrics) == 75
     assert "checkoutservice:cpu" in fc.metrics
     assert "checkoutservice:latency-90" in fc.metrics
     # every column attributes to a real service, none fall into the
@@ -122,7 +122,7 @@ def test_re2_ob_span_count_and_parent_links():
     assert len(fc.traces) == 400
     assert all(isinstance(s, Span) for s in fc.traces)
     with_parent = [s for s in fc.traces if s.parent_span_id]
-    assert len(with_parent) == 368
+    assert len(with_parent) == 373
 
 
 def test_re2_ob_topology_edge_set():

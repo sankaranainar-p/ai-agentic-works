@@ -4,8 +4,16 @@ pre/signals/rcaeval.py — Adapter for the RCAEval benchmark (RE1, RE2).
 RCAEval ships failure cases on disk as:
 
     {dataset}/{service}_{fault}/{repeat}/
-        data.csv           wide time-series: `time` + one `{service}_{metric}`
-                            column per service/metric pair (RE1 and RE2)
+        data.csv            RE1: wide time-series, `time` + one
+                             `{service}_{metric}` column per pair
+        simple_metrics.csv  RE2: the same `time` + `{service}_{metric}`
+                             format as RE1's data.csv (RE2 cases have no
+                             data.csv; they instead carry a much larger
+                             metrics.csv using raw Prometheus metric names,
+                             which this adapter does not use — confirmed
+                             against the real Zenodo RE2-OB/RE2-TT
+                             archives, not just RCAEval's own smaller
+                             multi-source demo release)
         inject_time.txt     unix-seconds fault injection timestamp
         logs.csv            RE2 only: raw log lines with a `container_name`
                              (service) column
@@ -15,9 +23,9 @@ RCAEval ships failure cases on disk as:
 `(FailureCase, GroundTruth)` pair per case directory, in sorted order for
 reproducibility. `dataset` selects the RE1 or RE2 top-level directory name
 (e.g. "RE1-OB", "RE2-TT"); RE3 (code-level faults) is out of scope for this
-adapter — RE3 case directories use the same `data.csv`/`logs.csv`/
-`traces.csv` layout but different fault codes (f1-f5) that don't have a
-service+metric-based ground truth the same way.
+adapter — RE3 case directories use the same file layout but different
+fault codes (f1-f5) that don't have a service+metric-based ground truth
+the same way.
 
 Ground truth in RCAEval is inferred entirely from the directory name
 (`{service}_{fault}/{repeat}`), matching how RCAEval's own `main.py`
@@ -83,8 +91,28 @@ def _parse_case_dir_name(fault_service_dir: str, repeat_dir: str, dataset: str) 
     return case_id, service, fault
 
 
+def _resolve_metrics_file(case_dir: Path) -> Path:
+    """Locate the per-service `svc_metric`-named metrics file in a case dir.
+
+    RE1 cases ship this as `data.csv`. RE2 cases (confirmed against the real
+    Zenodo archives, not just RCAEval's own multi-source demo release) ship
+    it as `simple_metrics.csv`, alongside a much larger `metrics.csv` that
+    uses raw Prometheus-style metric names instead of the curated
+    `svc_metric` convention this adapter (and RCAEval's own `main.py`, via
+    its documented data.csv -> simple_metrics.csv fallback) expects.
+    """
+    for name in ("data.csv", "simple_metrics.csv"):
+        candidate = case_dir / name
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"no data.csv or simple_metrics.csv in {case_dir}"
+    )
+
+
 def _load_metrics(data_csv: Path) -> dict[str, MetricSeries]:
-    """Load data.csv into {svc:metric -> MetricSeries}.
+    """Load a metrics file (data.csv or simple_metrics.csv) into
+    {svc:metric -> MetricSeries}.
 
     Drops the duplicate `time.1` column RCAEval's CSVs carry and any column
     that doesn't parse as a `{service}_{metric}` pair (there are a handful of
@@ -257,10 +285,8 @@ class RCAEvalAdapter:
             fault_service_dir, repeat_dir, self.dataset
         )
 
-        data_csv = case_dir / "data.csv"
-        if not data_csv.exists():
-            raise FileNotFoundError(f"no data.csv in {case_dir}")
-        metrics = _load_metrics(data_csv)
+        metrics_csv = _resolve_metrics_file(case_dir)
+        metrics = _load_metrics(metrics_csv)
 
         inject_path = case_dir / "inject_time.txt"
         inject_time = int(inject_path.read_text().strip()) if inject_path.exists() else 0
