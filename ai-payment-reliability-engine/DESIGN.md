@@ -119,8 +119,19 @@ pre/
     └── handlers/
         └── __init__.py      One async handler per fault_class category
 
+pre/signals/                 Adapters normalising external benchmark
+├── __init__.py               datasets into a shared FailureCase /
+├── types.py                  GroundTruth / LogEvent / Span model (see
+├── log_template.py            module docstrings for the isolation
+└── rcaeval.py                 invariant: GroundTruth is never reachable
+                                from a FailureCase handed to an agent)
+
 data/
-└── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
+├── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
+├── scripts/
+│   └── download_rcaeval.py  Downloads + checksum-verifies RCAEval RE1/RE2
+│                             zips from Zenodo record 14590730 into data/rcaeval/
+└── rcaeval/                 (gitignored) full downloaded RCAEval datasets
 
 models/
 └── ml_classifier_v1.joblib  Persisted trained ML pipeline (fixed seed)
@@ -128,7 +139,12 @@ models/
 tests/
 ├── test_health.py           Smoke test: app starts, GET /health succeeds
 ├── test_taxonomy.py         Validates data/taxonomy.yaml sli_map integrity
-└── test_verification_stub.py  Locks in NotImplementedError stub behaviour:
-                              background paths log-and-continue, POST
-                              /trigger surfaces it as a 500
+├── test_verification_stub.py  Locks in NotImplementedError stub behaviour:
+│                             background paths log-and-continue, POST
+│                             /trigger surfaces it as a 500
+├── test_rcaeval_adapter.py  Tests pre/signals/rcaeval.py against the
+│                             trimmed fixture in tests/fixtures/rcaeval/
+├── test_rcaeval_downloader.py  Tests download_rcaeval.py's checksum
+│                             verification without network access
+└── fixtures/rcaeval/        Trimmed RE1-OB + RE2-OB cases (~420KB total)
 ```

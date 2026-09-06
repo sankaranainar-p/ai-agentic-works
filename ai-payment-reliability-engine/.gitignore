@@ -1,7 +1,11 @@
 data/*.db
+data/rcaeval/
 !data/taxonomy.yaml
+!data/scripts/
 __pycache__/
 *.pyc
+.venv/
+venv/
 .env
 frontend/.env
 node_modules/
