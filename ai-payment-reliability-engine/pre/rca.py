@@ -70,11 +70,88 @@ Respond with ONLY the JSON object — no markdown, no explanation."""
 
 
 # ---------------------------------------------------------------------------
-# Fallback data — do not modify
+# Fallback data — keyed on the shared fault_class taxonomy
+# (data/taxonomy.yaml, see pre/classifier/taxonomy.py)
 # ---------------------------------------------------------------------------
 
 TEMPLATE_RCA: dict[str, dict] = {
-    "latency": {
+    "cpu": {
+        "probable_cause": "Sustained CPU saturation on payment service nodes throttling request processing",
+        "contributing_factors": [
+            "Traffic spike beyond provisioned capacity",
+            "Inefficient hot-path code consuming excess CPU",
+            "Missing or misconfigured horizontal autoscaling",
+        ],
+        "immediate_actions": [
+            "Check CPU utilisation and throttling metrics on affected nodes",
+            "Trigger manual horizontal scale-out if autoscaler has not reacted",
+            "Identify top CPU-consuming code paths via profiler/flame graph",
+        ],
+        "long_term_fixes": [
+            "Tune horizontal pod autoscaler thresholds and cooldowns",
+            "Optimise the hottest CPU-bound code paths",
+        ],
+        "impact_assessment": "Payment request processing slowed or dropped due to CPU contention",
+        "estimated_resolution_time": "10-20 minutes",
+    },
+    "memory": {
+        "probable_cause": "Memory leak or undersized heap causing OOM kills in payment service pods",
+        "contributing_factors": [
+            "Unbounded cache or connection object growth",
+            "Recent deployment introducing a memory leak",
+            "Memory limits set below actual working-set size",
+        ],
+        "immediate_actions": [
+            "Restart affected pods to recover immediately",
+            "Capture a heap dump before the next restart for analysis",
+            "Review recent deployments for suspect memory-growth changes",
+        ],
+        "long_term_fixes": [
+            "Fix the underlying leak (unbounded cache/collection)",
+            "Right-size memory limits and add proactive alerting before OOM",
+        ],
+        "impact_assessment": "Payment worker pods crash-looping, dropping in-flight transactions",
+        "estimated_resolution_time": "10-30 minutes",
+    },
+    "disk": {
+        "probable_cause": "Disk space or I/O saturation on a payment service or database host",
+        "contributing_factors": [
+            "Uncontrolled log growth filling the disk",
+            "Large batch job producing temp files without cleanup",
+            "Underlying storage volume I/O throughput exhausted",
+        ],
+        "immediate_actions": [
+            "Free space via emergency log rotation / temp file cleanup",
+            "Check disk I/O wait metrics for the affected volume",
+            "Migrate hot data to a faster storage tier if I/O-bound",
+        ],
+        "long_term_fixes": [
+            "Add automated log rotation and retention policies",
+            "Provision storage with headroom and set proactive disk alerts",
+        ],
+        "impact_assessment": "Write failures or degraded throughput on payment persistence layer",
+        "estimated_resolution_time": "15-30 minutes",
+    },
+    "socket": {
+        "probable_cause": "Connection pool or socket/file-descriptor exhaustion in the payment service",
+        "contributing_factors": [
+            "Connections not returned to the pool after use (leak)",
+            "Traffic spike exceeding provisioned pool size",
+            "Slow downstream holding connections open longer than expected",
+        ],
+        "immediate_actions": [
+            "Reset the connection pool and terminate idle long-running connections",
+            "Check for a recent deployment that stopped closing connections properly",
+            "Temporarily raise the pool size limit if traffic is the cause",
+        ],
+        "long_term_fixes": [
+            "Fix the connection leak at its source",
+            "Add pool utilisation alerting before exhaustion occurs",
+        ],
+        "impact_assessment": "New payment requests rejected or queued once the pool is exhausted",
+        "estimated_resolution_time": "10-20 minutes",
+    },
+    "delay": {
         "probable_cause": "Increased response times detected in payment processing pipeline",
         "contributing_factors": [
             "Database query performance degradation",
@@ -93,46 +170,65 @@ TEMPLATE_RCA: dict[str, dict] = {
         "impact_assessment": "Payment processing delays affecting customer checkout experience",
         "estimated_resolution_time": "30-60 minutes",
     },
-    "error_rate": {
-        "probable_cause": "Elevated error rates in payment transaction processing",
+    "logic_error": {
+        "probable_cause": "Elevated error rates in payment transaction processing from a code-level logic defect",
         "contributing_factors": [
-            "Payment gateway connectivity issues",
-            "Invalid request format changes",
-            "Downstream service failures",
+            "Recent deployment introducing a regression",
+            "Invalid request/response format changes upstream",
+            "Untested edge case in business logic",
         ],
         "immediate_actions": [
-            "Check payment gateway status page",
+            "Roll back the most recent deployment if timeline correlates",
             "Review error logs for specific failure patterns",
             "Verify API contract compliance with payment processors",
         ],
         "long_term_fixes": [
-            "Implement comprehensive error monitoring",
-            "Add retry logic with exponential backoff",
+            "Add regression tests for the failing code path",
+            "Add retry logic with exponential backoff for transient failures",
         ],
         "impact_assessment": "Payment failures directly impacting revenue and customer trust",
         "estimated_resolution_time": "15-45 minutes",
     },
-    "timeout": {
-        "probable_cause": "Payment service timeouts exceeding configured thresholds",
+    "concurrency_issue": {
+        "probable_cause": "Lock contention, deadlocks, or race conditions in concurrent payment transaction processing",
         "contributing_factors": [
-            "Slow external payment processor responses",
-            "Resource contention in payment service",
-            "Network packet loss",
+            "Lock contention on shared payment ledger state",
+            "Deadlock between concurrent order-processing transactions",
+            "Race condition allowing duplicate processing",
         ],
         "immediate_actions": [
-            "Check external payment processor status",
+            "Identify and release stuck locks / roll back deadlocked transactions",
             "Review thread pool and connection pool utilisation",
-            "Analyse network performance metrics",
+            "Check for duplicate charge/side-effect due to a race condition",
         ],
         "long_term_fixes": [
-            "Tune timeout configurations based on SLA requirements",
-            "Implement bulkhead pattern to isolate payment flows",
+            "Add idempotency keys to prevent duplicate processing",
+            "Reduce lock scope / adopt optimistic concurrency control",
         ],
-        "impact_assessment": "Customer transactions timing out causing failed payments",
+        "impact_assessment": "Customer transactions timing out or double-processing due to contention",
         "estimated_resolution_time": "20-40 minutes",
     },
-    "authentication": {
-        "probable_cause": "Authentication service failures blocking payment authorisation",
+    "api_compatibility_issue": {
+        "probable_cause": "A version or schema mismatch between the payment service and an integration partner",
+        "contributing_factors": [
+            "Upstream/downstream service deployed a breaking API change",
+            "Client pinned to a deprecated API version",
+            "Contract test coverage gap for the integration",
+        ],
+        "immediate_actions": [
+            "Pin the client to the last known-good API version",
+            "Confirm the breaking change with the integration owner",
+            "Review recent changelog/release notes for the dependency",
+        ],
+        "long_term_fixes": [
+            "Add contract tests for the integration boundary",
+            "Negotiate a deprecation/versioning policy with the provider",
+        ],
+        "impact_assessment": "Requests to/from the integration failing or returning malformed data",
+        "estimated_resolution_time": "20-60 minutes",
+    },
+    "configuration_error": {
+        "probable_cause": "A misconfiguration (expired certificate, bad env var, wrong feature flag) is blocking payment processing",
         "contributing_factors": [
             "Identity provider availability issues",
             "Certificate or token expiry",
@@ -147,29 +243,48 @@ TEMPLATE_RCA: dict[str, dict] = {
             "Implement certificate rotation automation",
             "Add authentication service redundancy",
         ],
-        "impact_assessment": "Customers unable to authenticate for payment processing",
+        "impact_assessment": "Payment requests failing due to a misconfigured dependency or service",
         "estimated_resolution_time": "15-30 minutes",
     },
-    "database": {
-        "probable_cause": "Database performance issues impacting payment data operations",
+    "exception_handling_error": {
+        "probable_cause": "An unhandled or improperly caught exception crashed the payment worker process",
         "contributing_factors": [
-            "Query performance degradation",
-            "Connection pool exhaustion",
-            "Disk I/O bottleneck",
+            "Unhandled exception left the process in a bad state",
+            "Missing catch/retry around a failing downstream call",
+            "Exception silently swallowed, masking the real failure",
         ],
         "immediate_actions": [
-            "Check active database connections and queries",
-            "Identify and terminate long-running queries",
-            "Review database resource utilisation",
+            "Restart the crashed worker process",
+            "Capture the stack trace and identify the failing call site",
+            "Add a temporary guard/retry around the failing call path",
         ],
         "long_term_fixes": [
-            "Optimise slow queries and add indexes",
-            "Implement read replicas for reporting queries",
+            "Add proper exception handling and structured error logging",
+            "Add alerting on unhandled exception rate",
         ],
-        "impact_assessment": "Payment data operations degraded affecting transaction reliability",
+        "impact_assessment": "Payment worker crashes interrupting in-flight transaction processing",
         "estimated_resolution_time": "30-60 minutes",
     },
-    "network": {
+    "dependency_failure": {
+        "probable_cause": "An upstream or third-party dependency required for payment processing is unavailable",
+        "contributing_factors": [
+            "Third-party provider outage or degraded status",
+            "DNS resolution failure to the dependency",
+            "Missing circuit breaker allowing cascading failure",
+        ],
+        "immediate_actions": [
+            "Check the dependency's public status page",
+            "Fail over to a backup provider if configured",
+            "Queue affected requests for replay once the dependency recovers",
+        ],
+        "long_term_fixes": [
+            "Add a circuit breaker and backup provider for this dependency",
+            "Add synthetic monitoring for the dependency's health",
+        ],
+        "impact_assessment": "Payment requests blocked or degraded pending dependency recovery",
+        "estimated_resolution_time": "Variable — dependent on third-party recovery",
+    },
+    "loss": {
         "probable_cause": (
             "Network packet loss or routing instability between payment service nodes. "
             "Likely caused by a BGP route change, physical link degradation, or firewall rule modification."
@@ -194,7 +309,7 @@ TEMPLATE_RCA: dict[str, dict] = {
         ),
         "estimated_resolution_time": "1-3 minutes from packet loss threshold breach",
     },
-    "performance_degradation": {
+    "performance_bottleneck": {
         "probable_cause": (
             "Latency degradation caused by resource contention or downstream bottleneck. "
             "Cache miss rate increase or CPU throttling forcing requests to slower code paths."
@@ -257,8 +372,8 @@ def generate_rca(
 
     Args:
         alert_text: Raw alert text describing the incident.
-        category:   Incident category (e.g. "latency", "error_rate").
-        severity:   Incident severity (e.g. "critical", "high").
+        category:   fault_class from data/taxonomy.yaml (e.g. "cpu", "logic_error").
+        severity:   Incident severity (e.g. "SEV-1", "SEV-2").
 
     Returns:
         (rca_dict, source) where source is "llm", "template", or "default".
