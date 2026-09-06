@@ -69,6 +69,24 @@ follow the same provider selection order:
 - **No `SLACK_BOT_TOKEN`** → notifications logged only
 - **No `PAGERDUTY_ROUTING_KEY`** → escalations logged only
 
+## Known Limitations
+
+- **Verification and monitor breach detection are stubs.** `pre/verification.py`
+  and `pre/monitor.py` previously simulated outcomes with `random.random()`;
+  they now raise `NotImplementedError` instead, so the pipeline never
+  silently fabricates a "resolved" result. Concretely:
+  - Background paths (startup seeding, the monitor's probabilistic breach
+    check) catch this exception per-incident and log a `seeding_error` /
+    `monitor_poll_error` event, so the app keeps running.
+  - The direct `POST /trigger` path does **not** catch it: calling
+    `/trigger` today returns HTTP 500 once it reaches the verify layer.
+  - To restore end-to-end incident processing, implement a real metrics
+    client (suggested module: `pre.telemetry.metrics_client`) that re-polls
+    the SLI named in `data/taxonomy.yaml` `sli_map` for the affected
+    service and compares it against a threshold, then call it from
+    `pre/verification.py::_check_resolution` and
+    `pre/monitor.py::_probabilistic_breach`.
+
 ## Deployment
 
 - **Local dev**: set `OLLAMA_BASE_URL=http://localhost:11434` in `.env`
@@ -109,5 +127,8 @@ models/
 
 tests/
 ├── test_health.py           Smoke test: app starts, GET /health succeeds
-└── test_taxonomy.py         Validates data/taxonomy.yaml sli_map integrity
+├── test_taxonomy.py         Validates data/taxonomy.yaml sli_map integrity
+└── test_verification_stub.py  Locks in NotImplementedError stub behaviour:
+                              background paths log-and-continue, POST
+                              /trigger surfaces it as a 500
 ```
