@@ -170,3 +170,45 @@ def faithfulness(cited_evidence_keys: Sequence[str], available_evidence_keys: Se
     cited = set(cited_evidence_keys)
     grounded = cited & available
     return len(grounded) / len(cited)
+
+
+# ---------------------------------------------------------------------------
+# Abstention metrics — coverage and precision at tau
+# ---------------------------------------------------------------------------
+
+def coverage_at_tau(posteriors: Sequence[float], tau: float) -> float:
+    """Fraction of predictions where max posterior >= tau (not abstained).
+
+    Coverage at tau is the complement of abstention rate: the fraction of
+    predictions the model makes (rather than abstaining on). Higher coverage
+    means fewer abstentions; tau=1.0 gives zero coverage (abstain on all),
+    tau=0.0 gives 100% coverage (never abstain).
+    """
+    if not posteriors:
+        raise ValueError("posteriors must not be empty")
+    return sum(1 for p in posteriors if p >= tau) / len(posteriors)
+
+
+def precision_at_tau(
+    y_true: Sequence[str],
+    y_pred: Sequence[str],
+    posteriors: Sequence[float],
+    tau: float,
+) -> float:
+    """Precision on non-abstained predictions (posterior >= tau).
+
+    Precision = TP / (TP + FP) computed only over predictions where
+    posterior >= tau. Undefined (returns 1.0) if no predictions pass the
+    threshold (coverage at tau = 0).
+    """
+    if len(y_true) != len(y_pred) or len(y_pred) != len(posteriors):
+        raise ValueError("length mismatch across y_true, y_pred, posteriors")
+
+    kept_true = [t for t, p in zip(y_true, posteriors) if p >= tau]
+    kept_pred = [p for p, pred_p in zip(y_pred, posteriors) if pred_p >= tau]
+
+    if not kept_pred:
+        return 1.0  # No predictions; vacuously perfect
+
+    tp = sum(1 for t, p in zip(kept_true, kept_pred) if t == p)
+    return tp / len(kept_pred) if kept_pred else 0.0

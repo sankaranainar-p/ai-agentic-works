@@ -173,3 +173,74 @@ def test_faithfulness_duplicate_citations_count_once():
 def test_faithfulness_empty_citations_raises():
     with pytest.raises(ValueError):
         faithfulness([], ["m1"])
+
+
+# ---------------------------------------------------------------------------
+# Abstention metrics tests
+# ---------------------------------------------------------------------------
+
+def test_coverage_at_tau_all_pass():
+    from bench.metrics import coverage_at_tau
+
+    posteriors = [0.5, 0.6, 0.7, 0.8, 0.9]
+    assert coverage_at_tau(posteriors, 0.0) == 1.0
+
+
+def test_coverage_at_tau_none_pass():
+    from bench.metrics import coverage_at_tau
+
+    posteriors = [0.1, 0.2, 0.3, 0.4, 0.5]
+    assert coverage_at_tau(posteriors, 1.0) == 0.0
+
+
+def test_coverage_at_tau_partial():
+    from bench.metrics import coverage_at_tau
+
+    posteriors = [0.1, 0.3, 0.5, 0.7, 0.9]
+    assert coverage_at_tau(posteriors, 0.5) == 0.6  # 3 out of 5 >= 0.5
+
+
+def test_precision_at_tau_all_correct():
+    from bench.metrics import precision_at_tau
+
+    y_true = ["a", "b", "c"]
+    y_pred = ["a", "b", "c"]
+    posteriors = [0.9, 0.8, 0.85]
+    assert precision_at_tau(y_true, y_pred, posteriors, 0.0) == 1.0
+
+
+def test_precision_at_tau_partial_correct():
+    from bench.metrics import precision_at_tau
+
+    y_true = ["a", "b", "c"]
+    y_pred = ["a", "x", "c"]
+    posteriors = [0.9, 0.8, 0.85]
+    # 2 correct out of 3
+    assert precision_at_tau(y_true, y_pred, posteriors, 0.0) == pytest.approx(2.0 / 3.0)
+
+
+def test_precision_at_tau_filtered():
+    from bench.metrics import precision_at_tau
+
+    y_true = ["a", "b", "c", "d"]
+    y_pred = ["a", "x", "c", "y"]
+    posteriors = [0.9, 0.3, 0.85, 0.2]
+    # At tau=0.5: keep indices 0,2 (both correct)
+    assert precision_at_tau(y_true, y_pred, posteriors, 0.5) == 1.0
+
+
+def test_precision_at_tau_no_predictions():
+    from bench.metrics import precision_at_tau
+
+    y_true = ["a", "b"]
+    y_pred = ["x", "y"]
+    posteriors = [0.2, 0.1]
+    # At tau=0.5, none pass, vacuously perfect
+    assert precision_at_tau(y_true, y_pred, posteriors, 0.5) == 1.0
+
+
+def test_coverage_at_tau_empty_raises():
+    from bench.metrics import coverage_at_tau
+
+    with pytest.raises(ValueError):
+        coverage_at_tau([], 0.5)
