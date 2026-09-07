@@ -1,7 +1,7 @@
-fault_type,n_cases,published_avg_at_5,observed_avg_at_5,diff,within_tolerance_0.02
-CPU,15,0.72,0.72,0.0,True
-MEM,15,0.99,0.9867,-0.0033,True
-DISK,15,1.0,1.0,0.0,True
-SOCKET,15,0.83,0.8267,-0.0033,True
-DELAY,15,0.63,0.6267,-0.0033,True
-LOSS,15,0.64,0.64,-0.0,True
+fault_type,n_cases,published_avg_at_5,observed_avg_at_5_raw,observed_avg_at_5_rounded,diff,within_tolerance_0.02
+CPU,15,0.72,0.72,0.72,0.0,True
+MEM,15,0.99,0.9867,0.99,0.0,True
+DISK,15,1.0,1.0,1.0,0.0,True
+SOCKET,15,0.83,0.8267,0.83,0.0,True
+DELAY,15,0.63,0.6267,0.63,0.0,True
+LOSS,15,0.64,0.64,0.64,0.0,True

@@ -6,15 +6,21 @@ checksum-verified RE2-TT dataset (Zenodo record 14590730), run through
 — i.e. through our own adapter/harness code path, not RCAEval's raw CSV loader.
 
 Published numbers are from the RCAEval README
-(`python main.py --method baro --dataset re2-tt --length 20`).
+(`python main.py --method baro --dataset re2-tt --length 20`), which itself
+prints `round(evaluator.average(5), 2)` — already rounded to 2 decimal
+places, not the raw float. `observed_avg_at_5_rounded` below is rounded the
+same way before comparing, so the diff reflects a genuine scoring
+discrepancy rather than raw-vs-rounded rounding noise (see `observed_avg_at_5_raw`
+for the unrounded value, and https://github.com/phamquiluan/RCAEval/blob/main/main.py
+for the print statement this reproduces).
 
-| Fault | N cases | Published Avg@5 | Observed Avg@5 | Diff | Within ±0.02 |
-|---|---|---|---|---|---|
-| CPU | 15 | 0.72 | 0.72 | +0.0000 | ✅ |
-| MEM | 15 | 0.99 | 0.9867 | -0.0033 | ✅ |
-| DISK | 15 | 1.0 | 1.0 | +0.0000 | ✅ |
-| SOCKET | 15 | 0.83 | 0.8267 | -0.0033 | ✅ |
-| DELAY | 15 | 0.63 | 0.6267 | -0.0033 | ✅ |
-| LOSS | 15 | 0.64 | 0.64 | -0.0000 | ✅ |
+| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Within ±0.02 |
+|---|---|---|---|---|---|---|
+| CPU | 15 | 0.72 | 0.72 | 0.72 | +0.0000 | ✅ |
+| MEM | 15 | 0.99 | 0.9867 | 0.99 | +0.0000 | ✅ |
+| DISK | 15 | 1.0 | 1.0 | 1.0 | +0.0000 | ✅ |
+| SOCKET | 15 | 0.83 | 0.8267 | 0.83 | +0.0000 | ✅ |
+| DELAY | 15 | 0.63 | 0.6267 | 0.63 | +0.0000 | ✅ |
+| LOSS | 15 | 0.64 | 0.64 | 0.64 | +0.0000 | ✅ |
 
 **Overall: PASS**

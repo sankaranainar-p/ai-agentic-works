@@ -70,14 +70,21 @@ def main() -> int:
     rows = []
     for fault_type, published in PUBLISHED_AVG_AT_5.items():
         ranked_answers = per_fault[fault_type]
-        observed = average_at_k(ranked_answers, k=5) if ranked_answers else None
+        observed_raw = average_at_k(ranked_answers, k=5) if ranked_answers else None
+        # RCAEval's own main.py prints round(evaluator.average(5), 2) --
+        # the README table is already rounded to 2dp, so compare rounded
+        # to rounded. Comparing raw-vs-rounded produces a spurious diff of
+        # up to 1/300 whenever the true fraction k/75 has k % 3 != 0 (see
+        # docs/b2_rcaeval_parity_report.md for the worked explanation).
+        observed = round(observed_raw, 2) if observed_raw is not None else None
         diff = None if observed is None else round(observed - published, 4)
         rows.append(
             {
                 "fault_type": FAULT_LABELS[fault_type],
                 "n_cases": len(ranked_answers),
                 "published_avg_at_5": published,
-                "observed_avg_at_5": round(observed, 4) if observed is not None else None,
+                "observed_avg_at_5_raw": round(observed_raw, 4) if observed_raw is not None else None,
+                "observed_avg_at_5_rounded": observed,
                 "diff": diff,
                 "within_tolerance_0.02": (diff is not None and abs(diff) <= 0.02),
             }
@@ -98,15 +105,22 @@ def main() -> int:
         "— i.e. through our own adapter/harness code path, not RCAEval's raw CSV loader.",
         "",
         "Published numbers are from the RCAEval README",
-        "(`python main.py --method baro --dataset re2-tt --length 20`).",
+        "(`python main.py --method baro --dataset re2-tt --length 20`), which itself",
+        "prints `round(evaluator.average(5), 2)` — already rounded to 2 decimal",
+        "places, not the raw float. `observed_avg_at_5_rounded` below is rounded the",
+        "same way before comparing, so the diff reflects a genuine scoring",
+        "discrepancy rather than raw-vs-rounded rounding noise (see `observed_avg_at_5_raw`",
+        "for the unrounded value, and https://github.com/phamquiluan/RCAEval/blob/main/main.py",
+        "for the print statement this reproduces).",
         "",
-        "| Fault | N cases | Published Avg@5 | Observed Avg@5 | Diff | Within ±0.02 |",
-        "|---|---|---|---|---|---|",
+        "| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Within ±0.02 |",
+        "|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         lines.append(
             f"| {row['fault_type']} | {row['n_cases']} | {row['published_avg_at_5']} | "
-            f"{row['observed_avg_at_5']} | {row['diff']:+.4f} | "
+            f"{row['observed_avg_at_5_raw']} | {row['observed_avg_at_5_rounded']} | "
+            f"{row['diff']:+.4f} | "
             f"{'✅' if row['within_tolerance_0.02'] else '❌'} |"
         )
 
