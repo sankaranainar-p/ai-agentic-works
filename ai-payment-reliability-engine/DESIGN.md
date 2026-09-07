@@ -124,8 +124,8 @@ pre/signals/                 Adapters normalising external benchmark
 ├── types.py                  GroundTruth / LogEvent / Span model (see
 ├── log_template.py            module docstrings for the isolation
 ├── rcaeval.py                  invariant: GroundTruth is never reachable
-└── openrca.py                  from a FailureCase handed to an agent).
-                                openrca.py additionally resamples OpenRCA
+├── openrca.py                   from a FailureCase handed to an agent).
+└── alert_synth.py               openrca.py additionally resamples OpenRCA
                                 Bank's mixed-granularity telemetry (60s
                                 metrics, 1s logs, 1ms traces) onto a
                                 shared 1s grid with explicit
@@ -133,6 +133,19 @@ pre/signals/                 Adapters normalising external benchmark
                                 see its module docstring and
                                 CONVERSION.md's OpenRCA section for the
                                 schema decisions and their verification.
+                                alert_synth.py (A5) turns a FailureCase's
+                                metrics into one synthetic monitoring
+                                Alert via robust (median/MAD) z-scoring
+                                against an ordered, versioned rule set
+                                in data/alert_rules.yaml — deterministic
+                                per case_id (same case always renders
+                                the same alert text, byte-for-byte; see
+                                tests/test_alert_synth.py's Hypothesis
+                                property test), with a documented,
+                                verified-against-real-data limitation
+                                around multiple-comparisons false
+                                positives on wide-metric-count cases
+                                (see CONVERSION.md's alert_synth section).
 
 bench/                       Benchmark harness (A14, PROTOCOL.md RQ1-5)
 ├── __init__.py
@@ -160,6 +173,9 @@ bench/                       Benchmark harness (A14, PROTOCOL.md RQ1-5)
 
 data/
 ├── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
+├── alert_rules.yaml         Ordered, versioned alert rules for
+│                             pre/signals/alert_synth.py (A5) — metric
+│                             suffix pattern -> z-threshold -> template
 ├── scripts/
 │   ├── download_rcaeval.py  Downloads + checksum-verifies RCAEval RE1/RE2
 │   │                         zips from Zenodo record 14590730 into data/rcaeval/
@@ -169,6 +185,13 @@ data/
 │                             public Hugging Face mirror into data/openrca/
 ├── rcaeval/                 (gitignored) full downloaded RCAEval datasets
 └── openrca/                 (gitignored) full downloaded OpenRCA Bank data
+
+scripts/
+├── generate_b2_parity_report.py  Regenerates docs/b2_rcaeval_parity_report.*
+└── alert_detection_delay_report.py  A5's required verification report:
+                              detection-delay distribution + silent rate
+                              per dataset, run against real fixture data
+                              (see CONVERSION.md's alert_synth section)
 
 models/
 └── ml_classifier_v1.joblib  Persisted trained ML pipeline (fixed seed)
@@ -191,6 +214,13 @@ tests/
 │                             window reproduction, forward-fill flag
 │                             mechanics, ground truth field mapping)
 ├── test_bench_metrics.py    Unit tests for bench/metrics.py
+├── test_alert_synth.py      Tests pre/signals/alert_synth.py (A5): one
+│                             unit test per rule in data/alert_rules.yaml,
+│                             a Hypothesis property test that the same
+│                             FailureCase always renders a byte-identical
+│                             Alert, and regression tests for the two
+│                             real MAD-floor bugs found against real
+│                             OpenRCA telemetry (see CONVERSION.md)
 ├── test_b2_rcaeval_parity.py  THE gate: B2 must match RCAEval's published
 │                             RE2-TT table. Requires a separate Python
 │                             3.12 venv with RCAEval installed and the

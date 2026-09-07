@@ -1,0 +1,104 @@
+# data/alert_rules.yaml — Ordered, versioned rules for
+# pre/signals/alert_synth.py (A5).
+#
+# Rules are evaluated against every `svc:metric` key in a FailureCase,
+# for every post-inject_time sample. "First breach" means the EARLIEST
+# timestamp at which any (rule, service, metric) triple's robust
+# z-score exceeds that rule's `z_threshold` — this is what makes
+# `Alert.detection_delay_seconds` meaningful as "how long after the
+# fault started would monitoring first have paged", not an artificial
+# rule-priority ordering. When multiple (rule, service, metric) triples
+# first breach at the exact same timestamp (common, since metrics are
+# sampled at fixed intervals and a real fault often perturbs several
+# metrics at once), THIS FILE'S ORDER is the tie-break: the earliest-
+# listed rule wins, and within a rule, the alphabetically-first
+# `service:metric` key wins. This is why the rules are "ordered" — the
+# order only ever matters for these same-timestamp ties, never for
+# picking between breaches at different timestamps (earlier always
+# wins regardless of rule order).
+#
+# `metric_pattern` is a Python regex (re.search, case-insensitive)
+# matched against the metric-key SUFFIX only (the part after the first
+# `:` in a FailureCase metric key, e.g. "cpu" in "checkoutservice:cpu"),
+# never against the service-name prefix. Patterns were derived by
+# enumerating the actual metric suffix vocabulary present in this
+# project's real adapters (RCAEval RE1/RE2 and OpenRCA Bank) — see
+# CONVERSION.md's alert_synth section for the exact enumeration
+# commands and which real metric keys each pattern was checked against.
+#
+# Each rule's `templates` map has two entries, `prometheus` and
+# `datadog` — one rendering style per template family. The specific
+# style used for a given case is chosen deterministically by a seed
+# derived from the case_id (see alert_synth.py's `_select_template`),
+# not by rule identity, so the same rule renders consistently for one
+# case but can appear in either style across different cases.
+#
+# version: bump this whenever a rule's threshold, pattern, or evaluation
+# order changes in a way that would alter which breach fires first for
+# an already-scored case — pre/signals/alert_synth.py records this
+# version on every Alert it produces (`Alert.rules_version`) so a
+# benchmark run's alerts can always be traced back to the exact rule set
+# that generated them.
+version: 1
+
+rules:
+  - id: memory_saturation
+    metric_pattern: "(?i)(^mem$|memusage|memused|memutil|memmax|memfree|memperc|memory)"
+    z_threshold: 3.0
+    payment_sli_hint: availability
+    templates:
+      prometheus: "ALERT MemorySaturation: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"warning\"}}"
+      datadog: "[Triggered] High Memory Usage on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: cpu_saturation
+    metric_pattern: "(?i)(^cpu$|cpuutil|cpuload|cpupercent|cpusystime|cpuusertime)"
+    z_threshold: 3.0
+    payment_sli_hint: availability
+    templates:
+      prometheus: "ALERT CPUSaturation: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"warning\"}}"
+      datadog: "[Triggered] High CPU on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: latency_degradation
+    metric_pattern: "(?i)(latency|^mrt$|responsetime|mean.?response)"
+    z_threshold: 3.0
+    payment_sli_hint: checkout_latency_p99
+    templates:
+      prometheus: "ALERT LatencyDegradation: {service} {metric} at {value:.2f}ms ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"critical\"}}"
+      datadog: "[Triggered] Elevated Latency on {service}: {metric} = {value:.2f}ms (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: error_rate_spike
+    metric_pattern: "(?i)(error|errorcount|^sr$)"
+    z_threshold: 2.5
+    payment_sli_hint: authorisation_success_rate
+    templates:
+      prometheus: "ALERT ErrorRateSpike: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"critical\"}}"
+      datadog: "[Triggered] Error Rate Spike on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: disk_pressure
+    metric_pattern: "(?i)(diskio|disk.?space|disk.?i.?o|fsavailable|fsused)"
+    z_threshold: 3.0
+    payment_sli_hint: availability
+    templates:
+      prometheus: "ALERT DiskPressure: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"warning\"}}"
+      datadog: "[Triggered] Disk Pressure on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: socket_saturation
+    metric_pattern: "(?i)(^socket$|neterr|netdrop)"
+    z_threshold: 3.0
+    payment_sli_hint: queue_lag
+    templates:
+      prometheus: "ALERT SocketSaturation: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"warning\"}}"
+      datadog: "[Triggered] Socket Saturation on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"
+
+  - id: generic_anomaly
+    # Catch-all: fires on ANY metric suffix not matched by a more
+    # specific rule above, at a higher threshold (less sensitive) since
+    # it has no domain-specific interpretation to lend it confidence.
+    # Always listed last — this is what makes the earlier rules "more
+    # specific" in practice (they get first refusal on every metric).
+    metric_pattern: ".*"
+    z_threshold: 4.0
+    payment_sli_hint: availability
+    templates:
+      prometheus: "ALERT AnomalyDetected: {service} {metric} at {value:.2f} ({z_score:.1f}σ above baseline) for {duration}s. labels={{service=\"{service}\", severity=\"info\"}}"
+      datadog: "[Triggered] Anomaly on {service}: {metric} = {value:.2f} (z={z_score:.1f}) — Monitor {monitor_id}"

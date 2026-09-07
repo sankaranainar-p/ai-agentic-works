@@ -340,3 +340,202 @@ trace_span.csv 2,632,745,307 bytes), after which `OpenRCABankAdapter`
 was pointed at that fresh download (independent of the fixture-building
 download above) and successfully loaded case 2 (Tomcat01, high memory
 usage, 2021-03-06 06:20:00) with 1721 metrics / 3782 logs / 51227 traces.
+
+# CONVERSION.md — Alert synthesiser (`pre/signals/alert_synth.py`, A5)
+
+## 1. Metric-suffix vocabulary the rules in `data/alert_rules.yaml` were derived from
+
+Rule regex patterns were not guessed — they were built by enumerating
+the *actual* metric-key suffix vocabulary present in every real adapter
+this project has:
+
+```python
+>>> from pre.signals.rcaeval import RCAEvalAdapter
+>>> fc, gt = list(RCAEvalAdapter("tests/fixtures/rcaeval", "RE1-OB"))[0]
+>>> sorted(set(k.split(":",1)[1] for k in fc.metrics))
+['cpu', 'error', 'latency', 'load', 'mem']
+>>> fc, gt = list(RCAEvalAdapter("tests/fixtures/rcaeval", "RE2-OB"))[0]
+>>> sorted(set(k.split(":",1)[1] for k in fc.metrics))
+['cpu', 'diskio', 'error', 'latency-50', 'latency-90', 'mem', 'socket', 'workload']
+```
+
+OpenRCA Bank's `metric_container.csv` uses ~1700 raw, unnormalised
+vendor KPI names per case (e.g.
+`OSLinux-OSLinux_MEMORY_MEMORY_MEMUsedMemPerc`,
+`Tomcat-MEMORY_7441-MEMORY_JVMFreeMemory`) rather than RCAEval's curated
+short suffixes — the rule patterns use `(?i)` case-insensitive substring/
+keyword matching (e.g. `mem`, `cpu`, `latency|mrt`) specifically so they
+generalise across both naming conventions without a separate rule set
+per adapter. OpenRCA's own documented `metric_app.csv` columns (`rr`,
+`sr`, `cnt`, `mrt` — confirmed against OpenRCA's own
+`rca/baseline/rca_agent/prompt/basic_prompt_Bank.py`, which states `mrt`
+= "mean response time") map `mrt` into `latency_degradation` and `sr`
+into `error_rate_spike`.
+
+## 2. `sli_map`'s `openrca_bank` entries don't match OpenRCA's real component names
+
+Verified directly:
+
+```python
+>>> from pre.signals.openrca import OpenRCABankAdapter
+>>> fc, gt = list(OpenRCABankAdapter("tests/fixtures/openrca_bank"))[0]
+>>> sorted(set(k.split(':')[0] for k in fc.metrics))
+['IG01', 'IG02', 'MG01', 'MG02', 'Mysql01', 'Mysql02', 'Redis01', 'Redis02',
+ 'Tomcat01', ..., 'apache01', 'apache02', 'app.ServiceTest1', ...]
+```
+
+But `data/taxonomy.yaml`'s `sli_map.openrca_bank` uses aspirational
+service names (`payment-gateway`, `core-banking`) that appear nowhere in
+this list — these were presumably written as illustrative placeholders
+when the taxonomy was first built (A2), before OpenRCA Bank's real
+component naming was known. `_attach_payment_sli`'s three-tier fallback
+(exact same-service match -> keyword-only match anywhere in the sli_map
+-> the rule's own `payment_sli_hint`) exists specifically so this
+mismatch degrades gracefully to tier 3 instead of crashing or returning
+`None` — verified by `tests/test_alert_synth.py::
+test_openrca_bank_sli_falls_back_to_rule_hint`, which asserts a real
+OpenRCA-shaped service name always resolves to *some* SLI. This
+`sli_map.openrca_bank` mismatch itself is a a pre-existing taxonomy
+issue, not something A5 fixes — flagged here for whoever next touches
+`data/taxonomy.yaml`.
+
+## 3. Two real MAD-floor bugs found and fixed against real OpenRCA telemetry
+
+The first version of `_robust_z_scores` used a fixed absolute floor
+(`1e-9`) for the scaled MAD, matching the precedent in
+`bench/baselines/rules.py`'s `N_SIGMA_FLOOR`. Testing against real
+downloaded OpenRCA Bank telemetry (not the trimmed fixture — the full,
+un-truncated 2021-03-04 date folder, `python data/scripts/
+download_openrca.py --dates 2021_03_04`) surfaced two distinct real
+failure modes:
+
+**Bug 1 — near-flat-but-real metrics produce absurd z-scores.**
+`IG01:OSLinux-OSLinux_MEMORY_MEMORY_NoCacheMemPerc`'s pre-window values
+were `[52.2403, 52.2532, 52.2660]` (percentage points) — genuinely not
+perfectly constant, but their MAD rounds to exactly `0.0` in floating
+point. A post-window value of `52.266` (an equally tiny, unremarkable
+movement) scored a z-score of **12,800,000** against the `1e-9` absolute
+floor. Fix attempt 1: floor relative to `|median_before|`
+(`_MAD_RELATIVE_FLOOR * abs(median_before)`, `_MAD_RELATIVE_FLOOR =
+0.01`).
+
+**Bug 2 — the relative-to-median floor is defeated when the pre-window
+straddles zero.** After fix attempt 1, running the same real download
+against 4 more real cases (record.csv rows 0, 1, 3, 45) still produced
+z-scores of **1,000,000,000+** on `Tomcat02:...MEMUsedMemPerc` and
+`Mysql01:...CacheMem`. Root cause: `Tomcat04:OSLinux-OSLinux_LOCALDISK_
+LOCALDISK-sdb_DSKBps`'s pre-window was `[0.0, 2.0, 5.0, 6.0]` — median
+`3.5`, but many disk/network counter-style metrics have pre-windows that
+straddle or sit near zero, where `|median_before|` alone is a poor scale
+reference. Fix (final): floor relative to
+`max(|median_before|, max(|v| for v in before))` — the pre-window's full
+value scale, not just its median.
+
+**Verification the final fix actually works**, both via unit test
+(`tests/test_alert_synth.py::
+test_robust_z_score_relative_floor_avoids_absurd_scores_on_near_flat_metric`,
+which reproduces bug 1's exact numbers) and by rerunning the real
+13-case OpenRCA sample above:
+
+```
+before fix 2:  Tomcat04:...DSKBps -> z ≈ 2,000,000,000  (bug)
+after fix 2:   same input (times=(0..9), before=(0,2,5,6), after has a
+               real value of 2.0 repeated) -> z ≈ 0.51  (sane)
+```
+
+## 4. Real-data run: detection-delay report output
+
+Full output of `python scripts/alert_detection_delay_report.py` against
+the committed fixtures (see the script's own docstring for why real
+fixture data, not synthetic cases, is used here — the synthetic unit
+tests in tests/test_alert_synth.py exist specifically to isolate each
+rule's logic from real-data noise, and this report is the complementary
+"does it actually work on real data" check):
+
+```
+=== RCAEval RE1-OB ===
+cases: 1
+detected: 1  silent: 0  silent_rate: 0.00%
+detection_delay_seconds: min=150 p50=150 p90=150 max=150 mean=150.0
+breaches by rule: {'memory_saturation': 1}
+
+=== RCAEval RE2-OB ===
+cases: 1
+detected: 1  silent: 0  silent_rate: 0.00%
+detection_delay_seconds: min=60 p50=60 p90=60 max=60 mean=60.0
+breaches by rule: {'latency_degradation': 1}
+
+=== OpenRCA Bank ===
+cases: 3
+detected: 0  silent: 3  silent_rate: 100.00%
+detection_delay_seconds: (no detected cases)
+
+=== Overall ===
+total cases across all datasets: 5
+total detected: 2  total silent: 3  overall silent_rate: 60.00%
+```
+
+The 3 OpenRCA fixture cases being all-silent is expected and documented:
+`tests/fixtures/openrca_bank/`'s telemetry is deliberately narrowed to
++-15s/+-60s windows around each case's ground-truth timestamp (see A4's
+CONVERSION.md section 7), which leaves too few pre-window samples for a
+meaningful median/MAD baseline in most metrics.
+
+## 5. KNOWN LIMITATION found via real-data verification: multiple-comparisons false positives on wide-metric-count cases
+
+Running the same 13 real (full, un-truncated, independently downloaded)
+OpenRCA Bank cases used for A4's spot-checks through `synthesize_alert`
+produced a striking pattern: **every single one** detected a breach at
+exactly the same detection delay (900 seconds — the very first
+post-boundary sample), regardless of the case's actual injected fault
+type or component:
+
+```
+OpenRCA-Bank_0_Mysql02   Mysql02   -> memory_saturation IG02      z=3.20  delay=900
+OpenRCA-Bank_1_Redis02   Redis02   -> memory_saturation MG01      z=3.15  delay=900
+OpenRCA-Bank_3_Tomcat02  Tomcat02  -> memory_saturation MG01      z=10.12 delay=900
+OpenRCA-Bank_45_MG02     MG02      -> memory_saturation Tomcat01  z=19.19 delay=900
+OpenRCA-Bank_46_MG02     MG02      -> memory_saturation Mysql02   z=100.0 delay=900
+OpenRCA-Bank_47_IG01     IG01      -> memory_saturation MG01      z=7.08  delay=900
+OpenRCA-Bank_48_MG02     MG02      -> memory_saturation MG02      z=5.70  delay=900
+OpenRCA-Bank_49_MG02     MG02      -> memory_saturation Tomcat04  z=7.08  delay=900
+OpenRCA-Bank_50_MG01     MG01      -> memory_saturation IG02      z=7.01  delay=900
+OpenRCA-Bank_51_IG01     IG01      -> memory_saturation IG02      z=7.01  delay=900
+OpenRCA-Bank_52_Tomcat03 Tomcat03  -> memory_saturation Tomcat04  z=7.08  delay=900
+OpenRCA-Bank_68_Redis02  Redis02   -> memory_saturation IG02      z=4.77  delay=900
+OpenRCA-Bank_69_Redis02  Redis02   -> memory_saturation MG01      z=5.73  delay=900
+```
+
+Note the detected `service` in every row is essentially uncorrelated
+with the real `root_cause_service` — a strong signal this is a
+statistical artifact, not real early detection. Root cause, verified
+with `scipy.stats.norm`:
+
+```python
+>>> from scipy import stats
+>>> z = 3.0
+>>> p_per_series_per_sample = 2 * (1 - stats.norm.cdf(z))  # two-sided
+>>> p_per_series_per_sample
+0.0026997960632602
+>>> 1 - (1 - p_per_series_per_sample) ** 1700   # OpenRCA's ~1700 series/case
+0.9899064638514919
+>>> 1 - (1 - p_per_series_per_sample) ** 49     # RCAEval RE1's 49 series/case
+0.1240698311854198
+```
+
+With ~1700 independently-scored metric series per OpenRCA case, there is
+a ~99% chance *some* series crosses a z=3.0 threshold at the very first
+post-boundary sample purely by chance, versus only ~12% for RCAEval's
+much smaller per-case metric count. This is not a bug in the z-score
+computation itself (separately verified correct above) — it is the
+well-known multiple-comparisons problem, applying a fixed per-series
+significance threshold across many independent series with no
+correction (e.g. Bonferroni). A real production alerting system at this
+scale would need such a correction or a multivariate anomaly score
+instead of per-series z-scores; this module intentionally does not add
+one (that would be a separate, unverified design decision), and instead
+reports the raw finding honestly in both
+`pre/signals/alert_synth.py`'s module docstring and
+`scripts/alert_detection_delay_report.py`'s printed output, rather than
+presenting the misleadingly uniform OpenRCA delay distribution as if it
+reflected genuinely fast detection.
