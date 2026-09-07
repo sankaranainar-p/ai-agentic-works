@@ -1,40 +1,34 @@
-aiosqlite==0.22.1
-annotated-doc==0.0.5
-annotated-types==0.8.0
-anyio==4.15.1
-certifi==2026.7.22
-click==8.5.0
-cloudpickle==3.1.2
-fastapi==0.141.1
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-hypothesis==6.167.1
-idna==3.19
-iniconfig==2.3.0
-joblib==1.6.0
-narwhals==2.25.0
-networkx==3.6.1
-numpy==2.4.6
-packaging==26.3
+# Core dependencies for AI Payment Reliability Engine
+# Pinned versions as of A6-A11 implementation
+
+# Data & ML pipeline
+numpy==2.0.2
 pandas==2.3.3
-pluggy==1.6.0
-pydantic==2.13.5
-pydantic_core==2.46.5
-Pygments==2.21.0
-pytest==9.1.1
-pytest-asyncio==1.4.0
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.3
-pytz==2026.3.post1
-PyYAML==6.0.3
 scikit-learn==1.6.1
-scipy==1.17.1
-six==1.17.0
-sortedcontainers==2.4.0
-starlette==1.6.0
-threadpoolctl==3.6.0
-typing-inspection==0.4.4
-typing_extensions==4.16.0
-tzdata==2026.3
-uvicorn==0.52.4
+networkx==3.2.1
+joblib==1.5.3
+
+# API & schemas
+pydantic==2.13.4
+pydantic-settings==2.2.1
+pydantic-core==2.46.4
+httpx==0.27.0
+
+# NLI & entailment judge (BLOCKING A9: not integrated yet)
+# Uncomment when A9 faithfulness judge backend is wired with real NLI model
+# sentence-transformers==3.0.1
+
+# vLLM client SDK (BLOCKING A11: placeholder only, needs validation)
+# Uncomment when A11 vLLM backend tested against real running instance
+# vllm==0.4.1
+
+# Testing
+pytest==8.4.2
+hypothesis==6.141.1
+
+# Server (for demo/API)
+starlette==0.38.1
+uvicorn==0.30.1
+
+# Logging & monitoring
+python-json-logger==2.0.7
