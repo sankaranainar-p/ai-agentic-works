@@ -27,11 +27,31 @@ class MetricSeries:
     """A single `svc:metric` time series.
 
     `times` are Unix seconds (int), `values` are floats aligned by index.
+
+    `is_forward_filled` is optional (defaults to None for adapters whose
+    native sampling rate already matches the series' rate, e.g. RCAEval's
+    per-second/per-minute exports consumed as-is). Adapters that resample
+    a coarser native rate up to a finer common resolution (e.g.
+    pre.signals.openrca upsampling 60s-cadence metrics to 1s) must set it:
+    `is_forward_filled[i] is True` means `values[i]` at `times[i]` is a
+    carried-forward repeat of the last real sample, not a value the source
+    system actually reported at that second. This lets downstream code
+    (or a human auditor) distinguish "the metric was actually flat here"
+    from "we don't know, we just repeated the last reading" without
+    re-deriving it from the original file.
     """
 
     key: str  # normalised "svc:metric", e.g. "productcatalogservice:cpu"
     times: tuple[int, ...]
     values: tuple[float, ...]
+    is_forward_filled: Optional[tuple[bool, ...]] = None
+
+    def __post_init__(self) -> None:
+        if self.is_forward_filled is not None and len(self.is_forward_filled) != len(self.times):
+            raise ValueError(
+                f"MetricSeries {self.key!r}: is_forward_filled length "
+                f"{len(self.is_forward_filled)} != times length {len(self.times)}"
+            )
 
     def __len__(self) -> int:
         return len(self.times)

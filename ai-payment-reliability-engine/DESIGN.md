@@ -123,8 +123,16 @@ pre/signals/                 Adapters normalising external benchmark
 ├── __init__.py               datasets into a shared FailureCase /
 ├── types.py                  GroundTruth / LogEvent / Span model (see
 ├── log_template.py            module docstrings for the isolation
-└── rcaeval.py                 invariant: GroundTruth is never reachable
-                                from a FailureCase handed to an agent)
+├── rcaeval.py                  invariant: GroundTruth is never reachable
+└── openrca.py                  from a FailureCase handed to an agent).
+                                openrca.py additionally resamples OpenRCA
+                                Bank's mixed-granularity telemetry (60s
+                                metrics, 1s logs, 1ms traces) onto a
+                                shared 1s grid with explicit
+                                MetricSeries.is_forward_filled flags —
+                                see its module docstring and
+                                CONVERSION.md's OpenRCA section for the
+                                schema decisions and their verification.
 
 bench/                       Benchmark harness (A14, PROTOCOL.md RQ1-5)
 ├── __init__.py
@@ -153,9 +161,14 @@ bench/                       Benchmark harness (A14, PROTOCOL.md RQ1-5)
 data/
 ├── taxonomy.yaml            Shared fault_class / payment_sli / sli_map taxonomy
 ├── scripts/
-│   └── download_rcaeval.py  Downloads + checksum-verifies RCAEval RE1/RE2
-│                             zips from Zenodo record 14590730 into data/rcaeval/
-└── rcaeval/                 (gitignored) full downloaded RCAEval datasets
+│   ├── download_rcaeval.py  Downloads + checksum-verifies RCAEval RE1/RE2
+│   │                         zips from Zenodo record 14590730 into data/rcaeval/
+│   └── download_openrca.py  Downloads OpenRCA Bank's record.csv/query.csv
+│                             plus only the telemetry date-folders they
+│                             reference (not the full ~26GB tree) from the
+│                             public Hugging Face mirror into data/openrca/
+├── rcaeval/                 (gitignored) full downloaded RCAEval datasets
+└── openrca/                 (gitignored) full downloaded OpenRCA Bank data
 
 models/
 └── ml_classifier_v1.joblib  Persisted trained ML pipeline (fixed seed)
@@ -172,6 +185,11 @@ tests/
 │                             verification without network access
 ├── test_rcaeval_metrics_file_resolution.py  Regression test: RE2 uses
 │                             simple_metrics.csv, not data.csv
+├── test_openrca_adapter.py  Tests pre/signals/openrca.py against the
+│                             trimmed real-data fixture in
+│                             tests/fixtures/openrca_bank/ (evidence
+│                             window reproduction, forward-fill flag
+│                             mechanics, ground truth field mapping)
 ├── test_bench_metrics.py    Unit tests for bench/metrics.py
 ├── test_b2_rcaeval_parity.py  THE gate: B2 must match RCAEval's published
 │                             RE2-TT table. Requires a separate Python
@@ -181,7 +199,19 @@ tests/
 ├── test_b5_openrca_agent.py  B5 exact-parity check against OpenRCA's own
 │                             archived Bank predictions/scores
 ├── test_run_benchmark.py    Tests bench/run_benchmark.py's harness
+├── contract/
+│   └── test_adapter_contract.py  Cross-adapter contract test: every
+│                             adapter's fixture output (RCAEval, OpenRCA
+│                             Bank) must satisfy the same FailureCase/
+│                             GroundTruth structural contract (see A4)
 └── fixtures/
     ├── rcaeval/              Trimmed RE1-OB + RE2-OB cases (~420KB total)
-    └── openrca/              OpenRCA's full archived agent-Bank.csv (88KB)
+    ├── openrca/              OpenRCA's full archived agent-Bank.csv (88KB,
+    │                         used by test_b5_openrca_agent.py only)
+    └── openrca_bank/         Trimmed real OpenRCA Bank telemetry, 3 cases
+                              narrowed to +-15s/+-60s windows (~4.4MB,
+                              used by test_openrca_adapter.py and the
+                              contract test; see CONVERSION.md for how
+                              this was built from the real download)
 ```
+

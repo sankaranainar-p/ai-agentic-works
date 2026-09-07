@@ -1,5 +1,6 @@
 data/*.db
 data/rcaeval/
+data/openrca/
 !data/taxonomy.yaml
 !data/scripts/
 results/
