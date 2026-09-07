@@ -16,9 +16,23 @@ re2-tt --length 20"):
     Avg@5-LOSS:   0.64
 
 This test requires:
-  1. The RCAEval package installed (Python 3.12/3.14 per RCAEval's own
-     requirement — this repo otherwise targets 3.9+, so this test is
-     collected but skipped when RCAEval isn't importable).
+  1. `RCAEval.e2e.baro` importable (RCAEval installed with its `[default]`
+     extras, which need Python 3.12/3.14 per RCAEval's own requirement --
+     see CONVERSION.md). Note this checks `RCAEval.e2e.baro` specifically,
+     not bare `import RCAEval`: RCAEval.e2e transitively imports
+     matplotlib, torch, etc., so a bare `import RCAEval` can succeed while
+     `from RCAEval.e2e import baro` still fails on a missing transitive
+     dependency in whatever interpreter happens to have a stray `pip
+     install RCAEval` in it without the `[default]` extras. This bit us
+     once already: `import RCAEval` had been run in this project's normal
+     Python 3.9 environment for unrelated research earlier in development
+     and never uninstalled, so importorskip("RCAEval") stopped skipping,
+     yet the test still couldn't actually run BARO -- it just failed
+     later, after already paying the ~10 minute cost of loading all 90
+     RE2-TT cases' logs/traces. Checking the real needed import up front
+     avoids both problems: it skips correctly in a bare `import RCAEval`
+     environment, and it fails fast (before any dataset I/O) if RCAEval
+     is present but broken.
   2. The full real RE2-TT dataset downloaded via
      data/scripts/download_rcaeval.py --dataset RE2-TT (2.8GB) into
      RCAEVAL_RE2TT_DIR (env var) or data/rcaeval/RE2-TT by default.
@@ -36,7 +50,13 @@ from pathlib import Path
 
 import pytest
 
-rcaeval = pytest.importorskip("RCAEval", reason="RCAEval package not installed (Python 3.12/3.14 required)")
+# Check the actual symbol bench.baselines.rcaeval_baseline.rank() needs,
+# not bare `import RCAEval` -- see the module docstring for why that
+# distinction matters (matplotlib/torch import chain inside RCAEval.e2e).
+pytest.importorskip(
+    "RCAEval.e2e",
+    reason="RCAEval.e2e not importable (RCAEval[default] extras, Python 3.12/3.14 required — see CONVERSION.md)",
+)
 
 from bench.baselines.rcaeval_baseline import rank as b2_rank  # noqa: E402
 from bench.metrics import average_at_k  # noqa: E402

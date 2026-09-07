@@ -14,7 +14,7 @@ discrepancy rather than raw-vs-rounded rounding noise (see `observed_avg_at_5_ra
 for the unrounded value, and https://github.com/phamquiluan/RCAEval/blob/main/main.py
 for the print statement this reproduces).
 
-| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Within ±0.02 |
+| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Exact match to published rounded values |
 |---|---|---|---|---|---|---|
 | CPU | 15 | 0.72 | 0.72 | 0.72 | +0.0000 | ✅ |
 | MEM | 15 | 0.99 | 0.9867 | 0.99 | +0.0000 | ✅ |

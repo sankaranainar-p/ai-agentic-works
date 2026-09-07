@@ -1,4 +1,4 @@
-fault_type,n_cases,published_avg_at_5,observed_avg_at_5_raw,observed_avg_at_5_rounded,diff,within_tolerance_0.02
+fault_type,n_cases,published_avg_at_5,observed_avg_at_5_raw,observed_avg_at_5_rounded,diff,exact_match_after_rounding
 CPU,15,0.72,0.72,0.72,0.0,True
 MEM,15,0.99,0.9867,0.99,0.0,True
 DISK,15,1.0,1.0,1.0,0.0,True

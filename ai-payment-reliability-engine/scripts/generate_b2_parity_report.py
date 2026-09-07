@@ -86,7 +86,7 @@ def main() -> int:
                 "observed_avg_at_5_raw": round(observed_raw, 4) if observed_raw is not None else None,
                 "observed_avg_at_5_rounded": observed,
                 "diff": diff,
-                "within_tolerance_0.02": (diff is not None and abs(diff) <= 0.02),
+                "exact_match_after_rounding": (diff is not None and diff == 0.0),
             }
         )
 
@@ -113,7 +113,7 @@ def main() -> int:
         "for the unrounded value, and https://github.com/phamquiluan/RCAEval/blob/main/main.py",
         "for the print statement this reproduces).",
         "",
-        "| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Within ±0.02 |",
+        "| Fault | N cases | Published Avg@5 | Observed (raw) | Observed (rounded) | Diff | Exact match to published rounded values |",
         "|---|---|---|---|---|---|---|",
     ]
     for row in rows:
@@ -121,10 +121,10 @@ def main() -> int:
             f"| {row['fault_type']} | {row['n_cases']} | {row['published_avg_at_5']} | "
             f"{row['observed_avg_at_5_raw']} | {row['observed_avg_at_5_rounded']} | "
             f"{row['diff']:+.4f} | "
-            f"{'✅' if row['within_tolerance_0.02'] else '❌'} |"
+            f"{'✅' if row['exact_match_after_rounding'] else '❌'} |"
         )
 
-    all_pass = all(r["within_tolerance_0.02"] for r in rows)
+    all_pass = all(r["exact_match_after_rounding"] for r in rows)
     lines.append("")
     lines.append(f"**Overall: {'PASS' if all_pass else 'FAIL'}**")
 
