@@ -1,0 +1,186 @@
+# A13 slim testbed — forked OTel demo on kind.
+# Keeps the payment / checkout / fraud-detection path + their sync deps;
+# drops the astronomy-shop extras and the heavy observability backends.
+# See deploy/a13/README.md.
+
+default:
+  replicas: 1
+
+components:
+  # --- kept: the payment path + checkout's synchronous dependencies ---
+  #
+  # Resource headroom audit (2026-09-11, crictl stats under 3-5 checkouts/s):
+  # every {}-override component inherits the upstream chart's default memory
+  # limit, sized for the stock demo's much lower traffic — not this testbed's
+  # sustained load or flag-toggle churn. checkout, kafka, payment, email,
+  # fraud-detection and shipping measured at 60-99% of their inherited limit
+  # (checkout was already OOMKilling at its 20Mi default: exit 137, repeatedly,
+  # during A13 smoke runs). All six bumped below with the measured peak noted.
+  # cart, currency, quote, valkey-cart, frontend, frontend-proxy and
+  # astronomy-db measured comfortably under 50% and are left on the default.
+  payment:
+    replicas: 2
+    imageOverride:
+      repository: otel-demo-fork
+      tag: payment
+    # envOverrides (not env) so the chart's default payment env is kept and
+    # these are appended
+    envOverrides:
+      - name: ACQUIRER_EMULATOR_ADDR
+        value: acquirer-emulator:9560
+      - name: ACQUIRER_DEADLINE_MS
+        value: "2000"
+    # upstream default 140Mi; measured peak 133.6MB (95%) under paymentUnreachable
+    # churn. Bumped to keep peak under 55% of limit.
+    resources:
+      limits:
+        memory: 256Mi
+  checkout:
+    replicas: 2
+    # upstream default 20Mi; OOMKilled repeatedly (exit 137, "usage 20480kB,
+    # limit 20480kB") during the 16:49Z full A13 run — 3x during paymentUnreachable,
+    # 1x during kafkaQueueProblems. Measured peak only 14.68MB under a reproduced
+    # paymentUnreachable toggle here (lower traffic than the original run's 5.8/s),
+    # so this can't be sized off measurement alone the way the others were — set
+    # with a deliberately large margin above every peak observed, not a tight fit.
+    resources:
+      limits:
+        memory: 96Mi
+  fraud-detection:
+    replicas: 2
+    # upstream default 300Mi; measured peak 227.6MB (76%).
+    resources:
+      limits:
+        memory: 450Mi
+  cart: {}
+  # upstream default is 20Mi (paired with GOMEMLIMIT=16MiB) — too tight for this
+  # testbed's flag-toggle traffic churn; observed OOMKilled (exit 137) repeatedly
+  # during A13 smoke runs. Bumped 3x; GOMEMLIMIT raised to keep ~25% RSS headroom.
+  product-catalog:
+    resources:
+      limits:
+        memory: 64Mi
+    envOverrides:
+      - name: GOMEMLIMIT
+        value: 48MiB
+  currency: {}
+  shipping:
+    # upstream default 20Mi; measured peak 14.3MB (71%).
+    resources:
+      limits:
+        memory: 40Mi
+  quote: {}
+  email:          # checkout calls it after the charge; keep so PlaceOrder succeeds
+    # upstream default 100Mi; measured peak 75.9MB (76%).
+    resources:
+      limits:
+        memory: 160Mi
+  valkey-cart: {}
+  kafka:
+    # upstream default 700Mi; measured peak 696MB (99%) — one push from OOM under
+    # only moderate steady traffic, before any flag-toggle churn.
+    resources:
+      limits:
+        memory: 1100Mi
+  frontend: {}
+  frontend-proxy: {}
+  astronomy-db: {}    # product-catalog's DB in demo 3.0.0 (not just accounting's)
+
+  # flagd: mount the flagd-config ConfigMap directly at /etc/flagd instead of
+  # the chart's default (init-container copies it into an emptyDir shared with a
+  # flagd-ui sidecar). Direct mount means `kubectl patch configmap` propagates to
+  # the file and flagd hot-reloads via fsnotify with NO pod restart — so the
+  # flag-consuming services keep their flagd streams alive and see the change.
+  flagd:
+    mountedEmptyDirs: []
+    initContainers: []
+    sidecarContainers: []
+    additionalVolumes: []
+    mountedConfigMaps:
+      - name: config
+        mountPath: /etc/flagd
+        existingConfigMap: flagd-config
+    securityContext:
+      readOnlyRootFilesystem: true
+    # upstream default is 75Mi/GOMEMLIMIT=60MiB — same under-provisioning bug as
+    # product-catalog: OOMKilled repeatedly (10x over 3h in one A13 run) from this
+    # testbed's constant flagd-config patch/reload churn. Bumped 3x, same ratio.
+    resources:
+      limits:
+        memory: 225Mi
+    envOverrides:
+      - name: GOMEMLIMIT
+        value: 180MiB
+
+  # --- dropped ---
+  # traffic is driven by deploy/a13/drive-traffic.sh (add-to-cart + checkout),
+  # not the k6 load-generator, so the browse-flow deps aren't needed
+  load-generator:
+    enabled: false
+  recommendation:
+    enabled: false
+  image-provider:
+    enabled: false
+  accounting:
+    enabled: false
+  ad:
+    enabled: false
+  chatbot:
+    enabled: false
+  mcp:
+    enabled: false
+  agent:
+    enabled: false
+  telemetry-docs:
+    enabled: false
+  firepit:
+    enabled: false
+  # opamp-server kept: the collector chart ships an opamp extension that fails
+  # validation if its server has no endpoint, and it is not cleanly removable
+  # via values merge. It is tiny (75Mi limit).
+
+# --- observability backends ---
+opensearch:
+  enabled: false
+grafana:
+  enabled: false
+jaeger:
+  enabled: true
+  # the override below silently never applied: jaeger's own resources key is
+  # nested one level deeper (jaeger.jaeger.resources, not jaeger.resources —
+  # jaeger.jaeger is the actual Jaeger subchart's values namespace within the
+  # demo chart's dependency alias). Confirmed live: the pod ran at the
+  # upstream default (600Mi) the whole time despite this block existing.
+  # 600Mi was fine at ~0.3 checkouts/s; OOMKilled repeatedly (6x) once traffic
+  # reached 16/s. Bumped for the higher-throughput A13 testbed.
+  jaeger:
+    resources:
+      limits:
+        memory: 900Mi
+prometheus:
+  enabled: true
+  server:
+    resources:
+      limits:
+        memory: 600Mi
+    persistentVolume:
+      enabled: false
+
+opentelemetry-collector:
+  resources:
+    limits:
+      memory: 500Mi
+  config:
+    exporters:
+      otlphttp/loki:
+        logs_endpoint: http://loki.otel-demo.svc.cluster.local:3100/otlp/v1/logs
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          exporters: [otlp_grpc/jaeger, debug, span_metrics]
+        logs:
+          exporters: [otlphttp/loki, debug]
+        profiles:
+          exporters: [debug]
