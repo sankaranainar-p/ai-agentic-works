@@ -46,6 +46,8 @@ if str(_ROOT) not in sys.path:
 
 from api.fallback import build_fallback_findings  # noqa: E402
 from api.schemas import AnalyzeRequest, AnalyzeResponse, ComplianceFinding  # noqa: E402
+from arbitration import ArbitrationStrategy, FixedConfidenceMerge  # noqa: E402
+from detectors import Detector, LLMDetector, StaticScannerDetector  # noqa: E402
 from prompts.system_prompt import build_system_prompt  # noqa: E402
 from prompts.user_turn import build_user_turn  # noqa: E402
 from scanner.static_scanner import scan  # noqa: E402
@@ -521,92 +523,77 @@ def _parse_findings(
 
 _TITLE_SIMILARITY_THRESHOLD = 0.80
 
+_default_static_detector = StaticScannerDetector()
+_default_llm_detector = LLMDetector()
+_default_arbitration_strategy = FixedConfidenceMerge()
+
 
 def _deduplicate_findings(findings: List[ComplianceFinding]) -> List[ComplianceFinding]:
     """Remove near-duplicate findings from a merged LLM + static-scanner list.
 
-    Two findings are considered duplicates when:
-      1. They share the same rule_id  (exact match), AND
-      2. Their titles have SequenceMatcher similarity >= 0.80
-
-    When a duplicate pair is found, the finding with higher confidence is kept.
-    If confidence is equal, the earlier finding (lower index) wins.
-
-    The input list order is otherwise preserved; severity sort is re-applied
-    after deduplication.
+    Delegates to FixedConfidenceMerge.deduplicate() to preserve backward compatibility.
     """
-    kept: List[ComplianceFinding] = []
-
-    for candidate in findings:
-        duplicate_index: int = -1
-
-        for i, existing in enumerate(kept):
-            if existing.rule_id != candidate.rule_id:
-                continue
-            similarity = difflib.SequenceMatcher(
-                None, existing.title.lower(), candidate.title.lower()
-            ).ratio()
-            if similarity >= _TITLE_SIMILARITY_THRESHOLD:
-                duplicate_index = i
-                break
-
-        if duplicate_index == -1:
-            kept.append(candidate)
-        else:
-            # Replace the existing entry only if the candidate has strictly
-            # higher confidence (LLM findings win over static-scanner ones).
-            if candidate.confidence > kept[duplicate_index].confidence:
-                kept[duplicate_index] = candidate
-
-    _sev_order = {"high": 0, "medium": 1, "low": 2}
-    kept.sort(key=lambda f: _sev_order.get(f.severity, 99))
-    return kept
+    return _default_arbitration_strategy.deduplicate(findings)
 
 
 # ---------------------------------------------------------------------------
 # POST /analyze
 # ---------------------------------------------------------------------------
 
-@app.post("/analyze", response_model=AnalyzeResponse)
-def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
-    """Analyse source code for compliance violations.
-
-    1. Run the static pre-scanner.
-    2. Resolve the regulation's rule pack.
-    3. Build system + user prompts.
-    4. Dispatch to the configured LLM provider (Ollama or Anthropic).
-    5. Parse JSON findings.
-    6. On any LLM failure, fall back to static-scanner-derived findings.
-    """
+def run_analysis(
+    request: AnalyzeRequest,
+    static_detector: Optional[Detector] = None,
+    llm_detector: Optional[LLMDetector] = None,
+    arbitration_strategy: Optional[ArbitrationStrategy] = None,
+) -> AnalyzeResponse:
+    """Core analysis pipeline with pluggable detectors and arbitration strategy."""
     t0 = time.perf_counter()
+
+    if static_detector is None:
+        static_detector = _default_static_detector
+    if llm_detector is None:
+        llm_detector = _default_llm_detector
+    if arbitration_strategy is None:
+        arbitration_strategy = _default_arbitration_strategy
 
     # Step 1 — static pre-scan (always runs)
     hint_dict = scan(request.code, file_path=request.file_path)
 
-    # Step 2 — resolve rule pack
-    rule_pack_path = _resolve_rule_pack(request.regulation)
+    # Step 2 — resolve rule pack (validates regulation; raises HTTPException 400 if unknown)
+    _resolve_rule_pack(request.regulation)
 
-    # Step 3 — build prompts
-    system_prompt = _system_prompt_for(request.regulation, rule_pack_path)
-    user_turn = build_user_turn(
-        code=request.code,
-        file_path=request.file_path,
-        context_hint=hint_dict,
-        regulation_name=request.regulation,
-        extra_context=request.extra_context,
-    )
+    # Step 3 — static scanner findings (always generated; used for merge + fallback)
+    if hasattr(static_detector, "detect_with_hint"):
+        static_findings = static_detector.detect_with_hint(
+            request.code, hint_dict, file_path=request.file_path
+        )
+    else:
+        static_findings = static_detector.detect(
+            request.code, file_path=request.file_path, regulation=request.regulation
+        )
 
-    # Step 4 — static scanner findings (always generated; used for merge + fallback)
-    static_findings = build_fallback_findings(hint_dict, file_path=request.file_path)
-
-    # Step 5 — call LLM and parse response
+    # Step 4 — call LLM and parse response
     llm_unavailable = False
     llm_provider = "none"
     llm_findings: List[ComplianceFinding] = []
 
     try:
-        raw_text, llm_provider = call_llm(system_prompt, user_turn)
-        llm_findings = _parse_findings(raw_text, request.file_path)
+        if hasattr(llm_detector, "detect_with_provider_info"):
+            llm_findings, llm_provider = llm_detector.detect_with_provider_info(
+                request.code,
+                hint=hint_dict,
+                file_path=request.file_path,
+                regulation=request.regulation,
+                extra_context=request.extra_context,
+            )
+        else:
+            llm_findings = llm_detector.detect(
+                request.code,
+                file_path=request.file_path,
+                regulation=request.regulation,
+                extra_context=request.extra_context,
+            )
+            llm_provider = _llm_provider()
     except OllamaTimeoutError as exc:
         llm_unavailable = True
         llm_provider = "ollama-timeout"
@@ -628,18 +615,16 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         # but record the traceback so genuine bugs are not hidden.
         logger.exception("Unexpected LLM error; falling back to static findings")
 
-    # Step 6 — merge and deduplicate
+    # Step 5 — arbitration and deduplication via ArbitrationStrategy
     # Preserve specific failure labels (e.g. "ollama-timeout"); reset everything
     # else to "none" so the response always reflects the true outcome.
     if llm_unavailable and llm_provider not in ("ollama-timeout",):
         llm_provider = "none"
-        # LLM failed: static findings only, still deduplicate within them
-        findings = _deduplicate_findings(static_findings)
-    else:
-        # LLM succeeded: merge LLM findings (confidence=1.0) with static findings
-        # (confidence=0.6).  Deduplication keeps the higher-confidence version of
-        # any pair that shares rule_id and a similar title.
-        findings = _deduplicate_findings(llm_findings + static_findings)
+
+    findings = arbitration_strategy.arbitrate(
+        static_findings=static_findings,
+        llm_findings=[] if llm_unavailable else llm_findings,
+    )
 
     duration_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -652,6 +637,19 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         file_path=request.file_path,
         llm_provider=llm_provider,
     )
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    """Analyse source code for compliance violations.
+
+    1. Run the static pre-scanner.
+    2. Resolve the regulation's rule pack.
+    3. Run static detector.
+    4. Call LLM detector and parse response.
+    5. Arbitrate findings using the configured ArbitrationStrategy (default: FixedConfidenceMerge).
+    """
+    return run_analysis(request)
 
 
 # ---------------------------------------------------------------------------
