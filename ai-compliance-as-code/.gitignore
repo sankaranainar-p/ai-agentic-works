@@ -28,3 +28,7 @@ Thumbs.db
 # Editors
 .idea/
 *.swp
+
+# Evaluation outputs
+results/
+checkpoint.jsonl
