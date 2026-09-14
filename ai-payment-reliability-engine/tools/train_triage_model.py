@@ -239,7 +239,7 @@ def plot_reliability(splits: dict, path: Path):
 def plot_precision_tau(curve_df: pd.DataFrame, tau: float, path: Path):
     if plt is None:
         return
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(10.2, 7.65))  # 1020x765 at dpi=100
     ax.plot(curve_df["tau"], curve_df["precision"], "b-", lw=2, label="precision")
     ax.plot(curve_df["tau"], curve_df["recall"], "g-", lw=2, label="recall")
     ax.plot(curve_df["tau"], 1 - curve_df["abstain_rate"], "orange", lw=2, label="answer rate")
