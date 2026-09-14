@@ -5,7 +5,7 @@
   "chat_judge_model_digest": "ollama:qwen3.8:27b",
   "nli_model": "cross-encoder/nli-deberta-v3-base",
   "primary_judge": "chat_model",
-  "nli_note": "NLI scores are NOT averaged into any faithfulness number (see PROTOCOL.md). summary.faithfulness.* is the chat judge only; NLI enters only as nli_corroboration_rate. summary.nli_characterisation documents the capability ceiling and is not a faithfulness metric.",
+  "nli_note": "NLI scores are NOT averaged into any faithfulness number (see PROTOCOL.md). summary.faithfulness.* is the chat judge only; NLI enters only as nli_corroboration_rate, computed over PRODUCTION claims only (kind=='rca') -- control/adversarial claims are judge-calibration probes excluded from this denominator. The same rate computed over all populations is retained for reference as nli_corroboration_rate_all_populations. summary.nli_characterisation documents the capability ceiling and is not a faithfulness metric.",
   "case_ids": [
     "RE1-OB_cartservice_cpu_1",
     "RE1-OB_checkoutservice_cpu_1",
@@ -30,19 +30,21 @@
         "nli_cross_encoder"
       ],
       "caveats": [
-        "NLI scores are NOT averaged into any faithfulness number; only nli_corroboration_rate (chat-faithful claims NLI also rates >= 0.8) is reported. See PROTOCOL.md."
+        "NLI scores are NOT averaged into any faithfulness number; only nli_corroboration_rate (chat-faithful claims NLI also rates >= 0.8) is reported. See PROTOCOL.md.",
+        "nli_corroboration_rate is computed over production claims only (kind=='rca', n=40); nli_corroboration_rate_all_populations is the same computation over all 67 records (rca+control+adversarial), retained for reference, not canonical."
       ],
       "stage1_pass_rate": 1.0,
       "stage2_pass_rate": 0.5373134328358209,
       "overall_faithful_rate": 0.5373134328358209,
       "avg_faithfulness_score": 0.5217910447761195,
-      "nli_corroboration_rate": 0.2777777777777778,
+      "nli_corroboration_rate": 0.37037037037037035,
+      "nli_corroboration_rate_all_populations": 0.2777777777777778,
       "nli_confirm_threshold": 0.8
     },
     "nli_characterisation": {
       "mean_grounded": 0.2018,
       "mean_adversarial": 0.0001,
-      "mean_near_verbatim_rca": 0.9713
+      "mean_near_verbatim_grounded": 0.9713
     },
     "chat_grounded_mean": 0.7124,
     "chat_adversarial_mean": 0.0028
