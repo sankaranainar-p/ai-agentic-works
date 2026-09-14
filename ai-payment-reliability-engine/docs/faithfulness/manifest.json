@@ -1,0 +1,50 @@
+{
+  "timestamp": "20260910T170647Z",
+  "git_sha": "ce9491b1",
+  "rca_model_digest": "ollama:llama3.1",
+  "chat_judge_model_digest": "ollama:qwen3.8:27b",
+  "nli_model": "cross-encoder/nli-deberta-v3-base",
+  "primary_judge": "chat_model",
+  "nli_note": "NLI scores are NOT averaged into any faithfulness number (see PROTOCOL.md). summary.faithfulness.* is the chat judge only; NLI enters only as nli_corroboration_rate. summary.nli_characterisation documents the capability ceiling and is not a faithfulness metric.",
+  "case_ids": [
+    "RE1-OB_cartservice_cpu_1",
+    "RE1-OB_checkoutservice_cpu_1",
+    "RE1-OB_currencyservice_mem_1",
+    "RE1-OB_adservice_mem_1",
+    "RE1-OB_productcatalogservice_disk_1",
+    "RE1-OB_cartservice_disk_1",
+    "RE1-OB_checkoutservice_delay_1",
+    "RE1-OB_adservice_delay_1",
+    "RE1-OB_currencyservice_loss_1",
+    "RE1-OB_productcatalogservice_loss_1"
+  ],
+  "summary": {
+    "n_records": 67,
+    "n_grounded_stage1_pass": 49,
+    "n_adversarial_stage1_pass": 18,
+    "faithfulness": {
+      "n": 67,
+      "n_stage2_invalid": 0,
+      "judges": [
+        "chat_model",
+        "nli_cross_encoder"
+      ],
+      "caveats": [
+        "NLI scores are NOT averaged into any faithfulness number; only nli_corroboration_rate (chat-faithful claims NLI also rates >= 0.8) is reported. See PROTOCOL.md."
+      ],
+      "stage1_pass_rate": 1.0,
+      "stage2_pass_rate": 0.5373134328358209,
+      "overall_faithful_rate": 0.5373134328358209,
+      "avg_faithfulness_score": 0.5217910447761195,
+      "nli_corroboration_rate": 0.2777777777777778,
+      "nli_confirm_threshold": 0.8
+    },
+    "nli_characterisation": {
+      "mean_grounded": 0.2018,
+      "mean_adversarial": 0.0001,
+      "mean_near_verbatim_rca": 0.9713
+    },
+    "chat_grounded_mean": 0.7124,
+    "chat_adversarial_mean": 0.0028
+  }
+}
