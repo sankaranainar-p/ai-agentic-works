@@ -12,8 +12,9 @@ and records its approximate token size.
 
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import networkx as nx
@@ -29,9 +30,23 @@ class EvidenceItem:
 
     id: str  # Format: kpi:svc:metric | span:traceid | logtpl:hash
     type: str  # "kpi", "span", "log"
-    score: float  # Anomaly score [0, 1]
+    score: float  # Signal strength; unbounded for KPIs (log1p of |z|), [0,1] for spans/logs
     description: str  # One-line description for humans
     service: Optional[str] = None  # Service this evidence implicates
+    z_score: Optional[float] = None  # Raw robust z-score (KPIs only); secondary sort key
+    graph_distance: Optional[int] = None  # Hops from the alert's service (None = unknown/unreachable)
+
+
+def _sort_key(item: EvidenceItem) -> tuple[float, float, float]:
+    """Deterministic ranking key: score desc, then |z| desc, then graph distance asc.
+
+    Never falls back to list/insertion order for items that carry any
+    distinguishing signal — a KPI's score is a strictly monotone function
+    of |z|, so two KPIs with different z can never tie on the first key.
+    """
+    z_mag = abs(item.z_score) if item.z_score is not None else 0.0
+    dist = float(item.graph_distance) if item.graph_distance is not None else math.inf
+    return (-item.score, -z_mag, dist)
 
 
 @dataclass(frozen=True)
@@ -43,12 +58,26 @@ class EvidencePack:
     token_estimate: int  # Approximate token count for LLM consumption
 
 
+_MAD_TO_STD = 1.4826  # scales MAD to a consistent estimator of stddev for normal data
+_MAD_ABSOLUTE_FLOOR = 1e-9  # final fallback when the pre-window is genuinely all-zero
+_MAD_RELATIVE_FLOOR = 0.01  # minimum scaled-MAD as a fraction of the pre-window's value scale
+
+
 class RobustScaler:
     """Robust z-score using median and MAD (median absolute deviation)."""
 
     @staticmethod
     def robust_z_score(values: list[float], target: float) -> float:
-        """Compute robust z-score: (x - median) / (1.4826 * MAD)."""
+        """Compute robust z-score: (target - median) / scaled_MAD.
+
+        The MAD floor is relative to the pre-window's own value SCALE
+        (``_MAD_RELATIVE_FLOOR * max(|median|, max|v|)``), not a fixed
+        absolute epsilon — ported from ``pre/signals/alert_synth.py``'s
+        ``_robust_z_scores``. A near-constant-but-not-flat pre-window (MAD
+        rounds to 0.0 in float while the metric still moves a little) would
+        otherwise divide a tiny fluctuation by ~1e-9 and report a z-score
+        in the millions.
+        """
         if len(values) < 2:
             return 0.0
 
@@ -56,12 +85,13 @@ class RobustScaler:
         median = np.median(values_arr)
         mad = np.median(np.abs(values_arr - median))
 
-        if mad < 1e-9:  # Prevent division by zero on flat data
-            mad = 1e-9
-
-        # 1.4826 is the consistent estimator for normal distribution
-        scaling_factor = 1.4826 * mad if mad > 0 else 1.0
-        return (target - median) / scaling_factor
+        scale_reference = max(abs(median), float(np.max(np.abs(values_arr))))
+        scaled_mad = max(
+            mad * _MAD_TO_STD,
+            _MAD_RELATIVE_FLOOR * scale_reference,
+            _MAD_ABSOLUTE_FLOOR,
+        )
+        return (target - median) / scaled_mad
 
 
 class EvidenceRanker:
@@ -124,22 +154,25 @@ class EvidenceRanker:
             # Maximum post-breach value
             max_post = max(post_values) if post_values else 0.0
 
-            # Robust z-score against pre-baseline
+            # Robust z-score against pre-baseline. Score is log1p(|z|):
+            # unbounded and strictly monotone in |z|, so a z=6000 metric
+            # always outranks a z=4 one instead of both clipping to 1.0
+            # and being ordered by incidental CSV column order.
             z_score = RobustScaler.robust_z_score(pre_values, max_post)
-            anomaly_score = min(1.0, abs(z_score) / 3.0)  # Normalize to [0,1]
 
-            if anomaly_score > 0.1:  # Filter weak signals
+            if abs(z_score) > 0.3:  # Filter weak signals
                 svc, metric = key.split(":")
                 item = EvidenceItem(
                     id=f"kpi:{svc}:{metric}",
                     type="kpi",
-                    score=anomaly_score,
+                    score=math.log1p(abs(z_score)),
                     description=f"{key} spiked to {max_post:.1f} (z={z_score:.1f})",
                     service=svc,
+                    z_score=z_score,
                 )
                 items.append(item)
 
-        return sorted(items, key=lambda x: x.score, reverse=True)
+        return sorted(items, key=_sort_key)
 
     def rank_spans(self) -> list[EvidenceItem]:
         """Rank spans by error-ratio change."""
@@ -190,7 +223,7 @@ class EvidenceRanker:
                 )
                 items.append(item)
 
-        return sorted(items, key=lambda x: x.score, reverse=True)
+        return sorted(items, key=_sort_key)
 
     def rank_logs(self) -> list[EvidenceItem]:
         """Rank log templates by novelty (post-window only)."""
@@ -228,47 +261,32 @@ class EvidenceRanker:
                 )
                 items.append(item)
 
-        return sorted(items, key=lambda x: x.score, reverse=True)
+        return sorted(items, key=_sort_key)
+
+    def _distances_from_alert(self) -> dict[str, int]:
+        """Undirected hop count from the alert's service to every reachable
+        service. Empty when there is no topology or no alert service."""
+        topo = self.case.topology
+        alerting_svc = self.alert.service
+        if not alerting_svc or topo is None or topo.number_of_nodes() == 0:
+            return {}
+        undirected = topo.to_undirected()
+        if alerting_svc not in undirected:
+            return {}
+        return nx.single_source_shortest_path_length(undirected, alerting_svc)
 
     def boost_graph_path(self, items: list[EvidenceItem]) -> list[EvidenceItem]:
-        """Boost evidence scores if their service is 2 hops from alert service."""
-        if not self.alert.service or not self.case.topology:
-            return items
+        """Attach graph distance to every item, boost items within 2 hops of
+        the alert's service by 10%, and return the pack in ranked order."""
+        distances = self._distances_from_alert()
 
-        # Find all services within 2 hops
-        alerting_svc = self.alert.service
-        critical_path_svcs = {alerting_svc}
-
-        # One hop
-        if alerting_svc in self.case.topology:
-            critical_path_svcs.update(self.case.topology.successors(alerting_svc))
-            critical_path_svcs.update(self.case.topology.predecessors(alerting_svc))
-
-        # Two hops
-        for svc in list(critical_path_svcs):
-            if svc in self.case.topology:
-                critical_path_svcs.update(self.case.topology.successors(svc))
-                critical_path_svcs.update(self.case.topology.predecessors(svc))
-
-        # Boost items on critical path
-        boosted = []
+        out = []
         for item in items:
-            if item.service and item.service in critical_path_svcs:
-                # Boost score by 10% (capped at 1.0)
-                boosted_score = min(1.0, item.score * 1.1)
-                boosted.append(
-                    EvidenceItem(
-                        id=item.id,
-                        type=item.type,
-                        score=boosted_score,
-                        description=item.description,
-                        service=item.service,
-                    )
-                )
-            else:
-                boosted.append(item)
+            dist = distances.get(item.service) if item.service else None
+            score = item.score * 1.1 if (dist is not None and dist <= 2) else item.score
+            out.append(replace(item, score=score, graph_distance=dist))
 
-        return sorted(boosted, key=lambda x: x.score, reverse=True)
+        return sorted(out, key=_sort_key)
 
     def rank(self) -> EvidencePack:
         """Rank all evidence and return a capped pack."""

@@ -56,6 +56,51 @@ def test_llm_no_live_calls_mode():
             )
 
 
+def test_cache_key_depends_on_max_tokens():
+    """A retry with a bigger budget must not read back a truncated cached reply."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        client = LLMClient(cache_dir=tmpdir)
+        k_small = client._cache_key("ollama:qwen", "p", "s", max_tokens=800)
+        k_big = client._cache_key("ollama:qwen", "p", "s", max_tokens=2400)
+        assert k_small != k_big
+
+
+def test_truncated_flag_round_trips_through_cache():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_dir = Path(tmpdir)
+        client = LLMClient(cache_dir=cache_dir)
+        key = client._cache_key("ollama:qwen", "p", None, max_tokens=800)
+        client._save_cache(key, LLMResponse("partial…", "ollama:qwen", False, 800, truncated=True))
+
+        loaded = client._load_cache(key)
+        assert loaded is not None
+        assert loaded.truncated is True
+        assert loaded.cached is True
+
+
+def test_old_cache_entry_without_truncated_defaults_false():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_dir = Path(tmpdir)
+        client = LLMClient(cache_dir=cache_dir)
+        key = client._cache_key("ollama:qwen", "p", None, max_tokens=800)
+        (cache_dir / f"{key}.json").write_text(json.dumps(
+            {"text": "hi", "model_digest": "ollama:qwen", "tokens_used": 3}
+        ))
+        assert client._load_cache(key).truncated is False
+
+
+def test_parse_model_digest_handles_colon_in_model_name():
+    """Ollama tags contain a colon (qwen3.8:27b); the optional content digest
+    is separated with '@', so the model name is preserved intact."""
+    from pre.llm.client import _parse_model_digest
+
+    assert _parse_model_digest("ollama:llama3.1") == ("ollama", "llama3.1", "")
+    assert _parse_model_digest("ollama:qwen3.8:27b") == ("ollama", "qwen3.8:27b", "")
+    assert _parse_model_digest("vllm:my-model@sha256abc") == ("vllm", "my-model", "sha256abc")
+    with pytest.raises(ValueError):
+        _parse_model_digest("llama3.1")
+
+
 def test_llm_cache_key_deterministic():
     """Test that cache key is deterministic."""
     with tempfile.TemporaryDirectory() as tmpdir:

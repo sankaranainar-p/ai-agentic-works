@@ -21,6 +21,22 @@ from typing import Optional
 import httpx
 
 
+def _parse_model_digest(model_digest: str) -> tuple[str, str, str]:
+    """Parse "backend:model[@digest]" -> (backend, model, digest).
+
+    The model name may itself contain colons (Ollama tags like
+    "qwen3.8:27b", "llama3.1:latest"), so the optional content digest is
+    separated with "@", not ":". digest is "" when absent.
+    """
+    backend, sep, rest = model_digest.partition(":")
+    if not sep or not rest:
+        raise ValueError(
+            f"model_digest must be 'backend:model[@digest]', got {model_digest!r}"
+        )
+    model, _, digest = rest.partition("@")
+    return backend, model, digest
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     """Response from LLM call."""
@@ -29,6 +45,7 @@ class LLMResponse:
     model_digest: str
     cached: bool
     tokens_used: int
+    truncated: bool = False  # generation stopped at the token limit, not naturally
 
 
 class LLMClient:
@@ -38,16 +55,40 @@ class LLMClient:
         self,
         cache_dir: str | Path = ".llm_cache",
         live_calls_enabled: bool = True,
+        http_capture: Optional[str | Path] = None,
     ):
         """Initialize LLM client.
 
         Args:
             cache_dir: Directory for disk cache
             live_calls_enabled: False to disable live calls (cache-only mode for CI)
+            http_capture: if set, every LIVE request/response is appended to this
+                JSONL file (verbatim URL + bodies) — for showing the real wire
+                traffic and checking response field names.
         """
         self.cache_dir = Path(cache_dir)
         self.live_calls_enabled = live_calls_enabled
+        self.http_capture = Path(http_capture) if http_capture else None
+        self.total_tokens = 0  # cumulative generated-token count across call()s
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        if self.http_capture:
+            self.http_capture.parent.mkdir(parents=True, exist_ok=True)
+
+    def _capture(self, url: str, req_body: dict, resp) -> None:
+        if not self.http_capture:
+            return
+        try:
+            resp_body = resp.json()
+        except Exception:
+            resp_body = {"_raw_text": resp.text}
+        rec = {
+            "url": url,
+            "request": req_body,
+            "response_status": resp.status_code,
+            "response": resp_body,
+        }
+        with open(self.http_capture, "a") as f:
+            f.write(json.dumps(rec) + "\n")
 
     def call(
         self,
@@ -61,7 +102,8 @@ class LLMClient:
 
         Args:
             prompt: User prompt
-            model_digest: Model identifier (e.g., "ollama:llama3.1:abc123")
+            model_digest: "backend:model[@digest]" (e.g. "ollama:llama3.1",
+                "ollama:qwen3.8:27b", "vllm:mymodel@sha256abc")
             system_prompt: Optional system prompt
             max_tokens: Max tokens to generate
             seed: Optional seed for reproducibility
@@ -69,11 +111,12 @@ class LLMClient:
         Returns:
             LLMResponse with text, model digest, cache status, token count
         """
-        cache_key = self._cache_key(model_digest, prompt, system_prompt)
+        cache_key = self._cache_key(model_digest, prompt, system_prompt, max_tokens)
 
         # Try cache first
         cached_response = self._load_cache(cache_key)
         if cached_response is not None:
+            self.total_tokens += cached_response.tokens_used
             return cached_response
 
         # If live calls disabled, fail
@@ -94,6 +137,7 @@ class LLMClient:
 
         # Save to cache
         self._save_cache(cache_key, response)
+        self.total_tokens += response.tokens_used
 
         return response
 
@@ -102,9 +146,15 @@ class LLMClient:
         model_digest: str,
         prompt: str,
         system_prompt: Optional[str],
+        max_tokens: int = 2000,
     ) -> str:
-        """Compute SHA256 cache key from model and prompt."""
-        combined = f"{model_digest}\n{system_prompt or ''}\n{prompt}"
+        """Compute SHA256 cache key from model, prompt, and token budget.
+
+        `max_tokens` is part of the key: two calls with different budgets are
+        different calls, and a retry with a bigger budget must not read back a
+        cached truncated response.
+        """
+        combined = f"{model_digest}\n{system_prompt or ''}\n{prompt}\nmax_tokens={max_tokens}"
         return hashlib.sha256(combined.encode()).hexdigest()
 
     def _load_cache(self, cache_key: str) -> Optional[LLMResponse]:
@@ -118,6 +168,7 @@ class LLMClient:
                     model_digest=data["model_digest"],
                     cached=True,
                     tokens_used=data["tokens_used"],
+                    truncated=data.get("truncated", False),
                 )
             except Exception:
                 pass
@@ -130,6 +181,7 @@ class LLMClient:
             "text": response.text,
             "model_digest": response.model_digest,
             "tokens_used": response.tokens_used,
+            "truncated": response.truncated,
         }
         cache_file.write_text(json.dumps(data))
 
@@ -142,8 +194,7 @@ class LLMClient:
         seed: Optional[int],
     ) -> LLMResponse:
         """Make actual live call to LLM backend."""
-        # Parse model_digest to extract backend and model name
-        backend, model, digest = model_digest.split(":")
+        backend, model, _digest = _parse_model_digest(model_digest)
 
         if backend == "ollama":
             return self._call_ollama(prompt, model, system_prompt, max_tokens, seed)
@@ -168,26 +219,28 @@ class LLMClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        # Ollama's /api/chat takes generation params under "options", not at
+        # the top level, and streams NDJSON unless stream=False.
+        options = {"temperature": 0.0, "num_predict": max_tokens}
+        if seed is not None:
+            options["seed"] = seed
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": 0.0,  # Deterministic
-            "num_predict": max_tokens,
+            "stream": False,
+            "options": options,
         }
 
-        if seed is not None:
-            payload["seed"] = seed
-
+        url = f"{base_url}/api/chat"
         try:
-            response = httpx.post(
-                f"{base_url}/api/chat",
-                json=payload,
-                timeout=120.0,
-            )
+            response = httpx.post(url, json=payload, timeout=180.0)
+            self._capture(url, payload, response)
             response.raise_for_status()
             data = response.json()
 
             text = data.get("message", {}).get("content", "")
+            # Ollama /api/chat field names (verified against a live response):
+            # eval_count = generated tokens, prompt_eval_count = input tokens.
             tokens = data.get("eval_count", 0)
 
             return LLMResponse(
@@ -195,6 +248,7 @@ class LLMClient:
                 model_digest=f"ollama:{model}",
                 cached=False,
                 tokens_used=tokens,
+                truncated=data.get("done_reason") == "length",
             )
         except Exception as e:
             raise RuntimeError(f"Ollama call failed: {e}")
@@ -225,16 +279,16 @@ class LLMClient:
         if seed is not None:
             payload["seed"] = seed
 
+        url = f"{base_url}/v1/chat/completions"
         try:
-            response = httpx.post(
-                f"{base_url}/v1/chat/completions",
-                json=payload,
-                timeout=120.0,
-            )
+            response = httpx.post(url, json=payload, timeout=120.0)
+            self._capture(url, payload, response)
             response.raise_for_status()
             data = response.json()
 
-            text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            text = choice["message"]["content"]
+            # OpenAI-compatible: usage.completion_tokens / usage.prompt_tokens.
             tokens = data["usage"]["completion_tokens"]
 
             return LLMResponse(
@@ -242,6 +296,7 @@ class LLMClient:
                 model_digest=f"vllm:{model}",
                 cached=False,
                 tokens_used=tokens,
+                truncated=choice.get("finish_reason") == "length",
             )
         except Exception as e:
             raise RuntimeError(f"vLLM call failed: {e}")

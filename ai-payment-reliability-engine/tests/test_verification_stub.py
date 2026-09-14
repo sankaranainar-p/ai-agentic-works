@@ -28,10 +28,13 @@ os.environ.setdefault("VERIFY_WAIT_SECONDS", "0")
 
 
 @pytest.mark.asyncio
-async def test_verify_stub_raises_not_implemented_directly() -> None:
+async def test_verify_stub_raises_not_implemented_directly(monkeypatch) -> None:
     from pre.verification import verify
 
-    with pytest.raises(NotImplementedError, match="pre.telemetry.metrics_client"):
+    # Without A13_VERIFY_SLI wired, resolution has no real metric source and
+    # must surface loudly rather than guess.
+    monkeypatch.delenv("A13_VERIFY_SLI", raising=False)
+    with pytest.raises(NotImplementedError, match="A13_VERIFY_SLI"):
         await verify(category="cpu", severity="SEV-2", alert_text="cpu high")
 
 

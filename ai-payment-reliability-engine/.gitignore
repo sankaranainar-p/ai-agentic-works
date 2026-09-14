@@ -4,6 +4,10 @@ data/openrca/
 !data/taxonomy.yaml
 !data/scripts/
 results/
+.feature_cache/
+.llm_cache/
+.pipeline_cache/
+audit.jsonl
 __pycache__/
 *.pyc
 .venv/

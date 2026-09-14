@@ -34,16 +34,31 @@ class ActionProposalAgent:
         "dependency_failure": ActionType.REROUTE,
     }
 
-    def __init__(self, rca_result: RCAResult, case_id: Optional[str] = None):
+    def __init__(
+        self,
+        rca_result: RCAResult,
+        case_id: Optional[str] = None,
+        timestamp: Optional[int] = None,
+        fault_class: Optional[str] = None,
+        severity: Optional[str] = None,
+    ):
         """Initialize proposal agent with RCA result.
 
         Args:
             rca_result: RCA result with root cause and severity
             case_id: Case ID (defaults to rca_result.case_id)
+            timestamp: Unix seconds stamped on proposed Actions (defaults to
+                now; pass a fixed value for reproducible output).
+            fault_class: overrides the probable_cause text heuristic (pass the
+                triage agent's fault_class).
+            severity: overrides the probable_cause text heuristic (pass the
+                triage agent's severity, e.g. "SEV-2").
         """
         self.rca_result = rca_result
         self.case_id = case_id or rca_result.case_id
-        self.timestamp = int(time.time())
+        self.timestamp = int(time.time()) if timestamp is None else int(timestamp)
+        self._fault_class_override = fault_class
+        self._severity_override = severity
 
     def propose(self) -> list[Action]:
         """Propose actions for the incident.
@@ -81,8 +96,10 @@ class ActionProposalAgent:
         return "SEV-4" in self._infer_severity()
 
     def _infer_severity(self) -> str:
-        """Infer severity level from context (would come from triage result in production)."""
-        # This is a simplified inference; in production, severity comes from triage agent
+        """Severity from the triage override if given, else a probable_cause
+        text heuristic (kept for callers that don't pass triage output)."""
+        if self._severity_override:
+            return self._severity_override
         if "critical" in self.rca_result.probable_cause.lower():
             return "SEV-1"
         if "error" in self.rca_result.probable_cause.lower():
@@ -153,8 +170,10 @@ class ActionProposalAgent:
         )
 
     def _fault_class(self) -> str:
-        """Extract fault class from probable cause."""
-        # Simplified; in production this would be from the triage/RCA result
+        """Fault class from the triage override if given, else extracted from
+        the probable_cause text."""
+        if self._fault_class_override:
+            return self._fault_class_override
         probable_cause = self.rca_result.probable_cause.lower()
 
         fault_classes = [

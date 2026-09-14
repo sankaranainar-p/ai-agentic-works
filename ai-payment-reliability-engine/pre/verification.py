@@ -17,18 +17,26 @@ def _wait_seconds() -> float:
 
 
 def _check_resolution(category: str, severity: str, alert_text: str) -> bool:
-    """Re-poll the real metric source to determine whether the incident
-    has resolved.
+    """Re-poll the real SLI to determine whether the incident has resolved.
 
-    TODO(pre.telemetry.metrics_client): replace this stub with a real
-    metric re-poll against the payment_sli mapped for the affected
-    service (see data/taxonomy.yaml `sli_map`), e.g. querying Prometheus
-    for the SLI's current value and comparing it against its threshold.
+    Live-testbed path (A13): set A13_VERIFY_SLI to a payment_sli name (see
+    data/taxonomy.yaml) and PROM_URL to a reachable Prometheus; resolution is
+    then decided by pre.verify.kpi_verifier.wait_for_recovery — the SLI must
+    hold inside its objective for the sustained interval (PROTOCOL.md).
+
+    Without A13_VERIFY_SLI there is no real metric source wired, so this stays
+    a stub rather than guessing.
     """
+    sli = os.getenv("A13_VERIFY_SLI")
+    if sli:
+        from pre.verify.kpi_verifier import wait_for_recovery
+
+        return wait_for_recovery(sli).recovered
+
     raise NotImplementedError(
-        "Resolution check is a stub. Implement pre.telemetry.metrics_client "
-        "to re-poll the real SLI (see data/taxonomy.yaml sli_map) and "
-        "compare against its threshold, then call it from here."
+        "Resolution check is a stub. Set A13_VERIFY_SLI (+ PROM_URL) to verify "
+        "against the live testbed via pre.verify.kpi_verifier, or implement a "
+        "metric re-poll against the SLI mapped in data/taxonomy.yaml sli_map."
     )
 
 

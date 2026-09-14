@@ -186,3 +186,146 @@ def test_rca_result_schema_validation():
             root_cause_service="payment",
             probable_cause="CPU overload",
         )
+
+
+# ---------------------------------------------------------------------------
+# Prompt-subset citation validation + evidence-service consistency
+# ---------------------------------------------------------------------------
+
+def _delay_pack():
+    """The real RE1-OB_checkoutservice_delay_1 shape: checkoutservice latency
+    ranks 1-2 (shown), currencyservice metrics rank lower (NOT shown at k=2)."""
+    return EvidencePack(
+        case_id="RE1-OB_checkoutservice_delay_1",
+        items=[
+            EvidenceItem("kpi:checkoutservice:latency-50", "kpi", 8.71,
+                         "checkoutservice:latency-50 spiked to 2.7 (z=6055.2)", "checkoutservice"),
+            EvidenceItem("kpi:checkoutservice:latency-90", "kpi", 7.94,
+                         "checkoutservice:latency-90 spiked to 4.6 (z=2819.9)", "checkoutservice"),
+            EvidenceItem("kpi:currencyservice:mem", "kpi", 1.5,
+                         "currencyservice:mem spiked to 4.4e7 (z=3.8)", "currencyservice"),
+            EvidenceItem("kpi:currencyservice:latency-90", "kpi", 1.6,
+                         "currencyservice:latency-90 spiked (z=4.5)", "currencyservice"),
+        ],
+        token_estimate=80,
+    )
+
+
+def test_create_result_drops_id_outside_shown_prompt_subset():
+    """A claim citing an id that IS in the full pack but was NOT rendered in
+    the prompt (allowed_ids) must be dropped, not silently accepted."""
+    agent = RCAAgent(_delay_pack())
+    shown = {"kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"}  # top-2 rendered
+
+    in_prompt = Claim(text="checkoutservice latency spiked hard",
+                      evidence_ids=["kpi:checkoutservice:latency-50"], confidence=0.9)
+    out_of_prompt = Claim(text="checkoutservice also had a memory blip",
+                          evidence_ids=["kpi:currencyservice:mem"], confidence=0.6)  # real id, not shown
+
+    res = agent.create_result("checkoutservice", "delay fault on checkoutservice",
+                              [in_prompt, out_of_prompt], allowed_ids=shown)
+
+    assert [c.text for c in res.claims] == ["checkoutservice latency spiked hard"]
+    assert res.dropped_claims == 1
+    assert "not shown in the prompt" in res.drop_reasons[0]
+    assert "kpi:currencyservice:mem" in res.drop_reasons[0]
+
+
+def test_create_result_flags_wrong_service_attribution():
+    """The real checkoutservice_delay_1 failure: a claim naming 'currencyservice'
+    while citing only checkoutservice evidence must be flagged/dropped."""
+    agent = RCAAgent(_delay_pack())
+    shown = {"kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"}
+
+    misattributed = Claim(
+        text="The currencyservice is experiencing high latency.",
+        evidence_ids=["kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"],
+        confidence=0.9,
+    )
+    correct = Claim(
+        text="The checkoutservice is experiencing high latency.",
+        evidence_ids=["kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"],
+        confidence=0.9,
+    )
+
+    res = agent.create_result("checkoutservice", "delay on checkoutservice",
+                              [misattributed, correct], allowed_ids=shown)
+
+    assert [c.text for c in res.claims] == ["The checkoutservice is experiencing high latency."]
+    assert res.dropped_claims == 1
+    assert "currencyservice" in res.drop_reasons[0]
+    assert "checkoutservice" in res.drop_reasons[0]
+
+
+def test_short_pseudo_service_names_do_not_false_positive():
+    """'main'/'redis' are pseudo-services in OB data — too short to scan for,
+    so prose like 'the main issue' is not flagged."""
+    pack = EvidencePack(
+        case_id="c", token_estimate=10,
+        items=[EvidenceItem("kpi:cartservice:cpu", "kpi", 5.0, "cartservice:cpu spiked", "cartservice"),
+               EvidenceItem("kpi:main:mem", "kpi", 4.0, "main:mem spiked", "main"),
+               EvidenceItem("kpi:redis:mem", "kpi", 4.0, "redis:mem spiked", "redis")],
+    )
+    agent = RCAAgent(pack)
+    claim = Claim(text="The main issue is cartservice CPU saturation.",
+                  evidence_ids=["kpi:cartservice:cpu"], confidence=0.9)
+    res = agent.create_result("cartservice", "cpu", [claim],
+                              allowed_ids={"kpi:cartservice:cpu"})
+    assert len(res.claims) == 1 and res.dropped_claims == 0
+
+
+# ---------------------------------------------------------------------------
+# Headline root_cause_service verified against surviving claims
+# ---------------------------------------------------------------------------
+
+def test_headline_root_cause_needs_review_when_unbacked():
+    """checkoutservice_delay_1 shape: model's summary says 'currencyservice'
+    but the only claim that survives validation cites recommendationservice
+    evidence -> the headline is not presented as a specific service."""
+    agent = RCAAgent(_delay_pack())
+    shown = {"kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"}
+    surviving = Claim(
+        text="recommendationservice load is elevated",
+        evidence_ids=["kpi:checkoutservice:latency-50"], confidence=0.7,
+    )  # names nothing >=6ch besides via cited svc; cites checkoutservice
+    res = agent.create_result("currencyservice", "currencyservice mem saturation",
+                              [surviving], allowed_ids=shown)
+    # surviving claim's cited service is checkoutservice, not currencyservice
+    assert res.root_cause_service == "needs_review"
+    assert res.root_cause_verified is False
+    assert res.proposed_root_cause_service == "currencyservice"
+    assert "currencyservice" in res.review_reason and "checkoutservice" in res.review_reason
+
+
+def test_headline_root_cause_kept_when_backed():
+    agent = RCAAgent(_delay_pack())
+    shown = {"kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"}
+    claim = Claim(text="checkoutservice latency spiked far above baseline",
+                  evidence_ids=["kpi:checkoutservice:latency-50", "kpi:checkoutservice:latency-90"],
+                  confidence=0.95)
+    res = agent.create_result("checkoutservice", "delay on checkoutservice",
+                              [claim], allowed_ids=shown)
+    assert res.root_cause_service == "checkoutservice"
+    assert res.root_cause_verified is True
+    assert res.review_reason == ""
+
+
+def test_headline_unknown_when_model_abstains():
+    agent = RCAAgent(_delay_pack())
+    claim = Claim(text="checkoutservice latency spiked",
+                  evidence_ids=["kpi:checkoutservice:latency-50"], confidence=0.9)
+    res = agent.create_result("unknown", "cannot determine", [claim],
+                              allowed_ids={"kpi:checkoutservice:latency-50"})
+    assert res.root_cause_service == "unknown"
+    assert res.root_cause_verified is False
+    assert "did not identify" in res.review_reason
+
+
+def test_headline_needs_review_when_all_claims_dropped():
+    agent = RCAAgent(_delay_pack())
+    bad = Claim(text="The currencyservice is experiencing high latency.",
+                evidence_ids=["kpi:checkoutservice:latency-50"], confidence=0.9)  # misattribution -> dropped
+    res = agent.create_result("checkoutservice", "x", [bad],
+                              allowed_ids={"kpi:checkoutservice:latency-50"})
+    assert res.claims == [] and res.dropped_claims == 1
+    assert res.root_cause_service == "needs_review" and res.root_cause_verified is False

@@ -28,6 +28,7 @@ class StepOutcome:
     error: Optional[str] = None
     timed_out: bool = False
     timestamp: float = None
+    detail: Optional[dict] = None  # free-form payload (SLI value, query, observed state)
 
     def __post_init__(self):
         if self.timestamp is None:

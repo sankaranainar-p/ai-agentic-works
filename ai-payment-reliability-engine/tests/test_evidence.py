@@ -40,6 +40,19 @@ def test_robust_z_score_short():
     assert z == 0.0
 
 
+def test_robust_z_score_near_flat_mad():
+    """Regression: a near-constant pre-window (MAD rounds to exactly 0.0 in
+    float, but the metric is not perfectly flat) must not blow up.
+
+    Before the relative MAD floor, the fixed 1e-9 epsilon turned a 0.05
+    fluctuation on a metric parked at ~52.25 into a z-score of ~3e7.
+    """
+    pre_window = [52.25, 52.25, 52.25, 52.25, 52.26]  # median 52.25, MAD == 0.0
+    z = RobustScaler.robust_z_score(pre_window, 52.30)  # 0.05 above median
+
+    assert abs(z) < 1.0, f"near-flat pre-window produced absurd z-score: {z}"
+
+
 def test_evidence_item_kpi_id():
     """Test KPI evidence ID format."""
     item = EvidenceItem(

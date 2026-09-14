@@ -14,13 +14,17 @@ pydantic-settings==2.2.1
 pydantic-core==2.46.4
 httpx==0.27.0
 
-# NLI & entailment judge (BLOCKING A9: not integrated yet)
-# Uncomment when A9 faithfulness judge backend is wired with real NLI model
-# sentence-transformers==3.0.1
+# NLI entailment judge (A9 stage-2, bench/faithfulness.py::_judge_nli)
+# Pulls torch (CPU) + transformers; model cross-encoder/nli-deberta-v3-base
+# downloads on first use (~440MB, cached under ~/.cache/huggingface).
+sentence-transformers==3.0.1
 
 # vLLM client SDK (BLOCKING A11: placeholder only, needs validation)
 # Uncomment when A11 vLLM backend tested against real running instance
 # vllm==0.4.1
+
+# Training reports (precision-vs-tau curve, reliability diagram)
+matplotlib==3.11.1
 
 # Testing
 pytest==8.4.2
