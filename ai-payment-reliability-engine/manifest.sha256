@@ -1,0 +1,64 @@
+# Artefact integrity baseline — Task 0.4
+# Regenerated: 2026-09-14 (post d3ab6a5e — all 8 artefacts now tracked)
+# Repo root: /Users/Sankar/ai-research-development/ai-agentic-works
+#
+# "git commit" is the commit whose tree contains the exact bytes hashed below,
+# verified via `git rev-parse <commit>:<path>` matching `git hash-object <path>`
+# for every entry. All 8 requested artefacts are tracked and clean (no pending
+# working-tree diff) as of this regeneration.
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness/judge_scores.jsonl
+sha256: 064f29af64b1429f5b25546aeabcbc83001bd354c33d63d0d8e0c66994fbc7c5
+size_bytes: 66342
+git_commit: 73a5dfce
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/b2_rcaeval_parity_report.csv
+sha256: b256c16ecbcb6fdb74bcce617884f9bc87047af4eb5e32e4afe27ed32ef53116
+size_bytes: 321
+git_commit: c510b7c6
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/a7_multisystem_training_report.md
+sha256: d1fb372c56a6ed378307cc5296e4a33807439183ebc409d5b2cf50f32aa3ebe5
+size_bytes: 5716
+git_commit: d3ab6a5e
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/a7_multisystem_precision_vs_tau.csv
+sha256: 4e3ed655b282dd90da7d06c06df681dd10a23058686c7465bd6f1a10bb2dcb96
+size_bytes: 3371
+git_commit: d3ab6a5e
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/data/taxonomy.yaml
+sha256: 762995206cb1c187e9d5f856c578526586b4caef5f020bb1e4071547ff9ad8d5
+size_bytes: 2881
+git_commit: 79d1b59c
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/PROTOCOL.md
+sha256: 827955408035d0bb252197f247527b9d857a3c8c397aecc51ae8ac13e93c887c
+size_bytes: 27327
+git_commit: 73a5dfce
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/a7_multisystem_precision_vs_tau.png
+sha256: 40d0db87bca2aebfa40988dc29666aead78b3cd96b5badbd4a8de4c14dae2a2b
+size_bytes: 58849
+git_commit: d3ab6a5e
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_by_claim_type.png
+sha256: 6dfe83c7f1c1d48496b445de76af569272fe6ece3bb29192fff46fcc09b2606d
+size_bytes: 58070
+git_commit: d3ab6a5e
+
+# NOTES (history, not open findings)
+# - judge_scores.jsonl: canonical run is 20260910T170647Z (generated at git_sha
+#   ce9491b1 per its own manifest.json), moved from the gitignored results/
+#   tree to docs/faithfulness/ and committed at 73a5dfce. A newer, unused
+#   20260913T024210Z run (git_sha 805c1211, 63 rows) still sits under
+#   results/faithfulness/ — untracked by design (results/ is gitignored),
+#   superseded, not cited anywhere. See 73a5dfce's commit message for why the
+#   older run was chosen as canonical over the newer one.
+# - PROTOCOL.md: re-baselined at 73a5dfce, which also committed the pending
+#   "A20 review" methodology corrections that were sitting as uncommitted
+#   local edits when this manifest was first generated.
+# - Original request cited baseline commit ce9491b1 for all 8 artefacts; only
+#   b2_rcaeval_parity_report.csv and taxonomy.yaml actually trace to a commit
+#   at or before ce9491b1 with unchanged content since. The other 6 postdate
+#   ce9491b1 and are correctly attributed to the later commits above.
