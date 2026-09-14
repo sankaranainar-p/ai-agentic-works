@@ -35,6 +35,17 @@ edit here, and the study restarts under the new version.
   runs before Sprint 2 rating begins, or (b) formally relax ω before
   freezing N, or (c) accept a wider realized CI on the reported kappa.
   This gap is a Sprint 1.5 blocker, not a Sprint 2 problem.
+  **Realized ω at N=67:** solving ω²=z²·Q/N gives ω=0.1710 (π=0.5) to
+  0.1715 (π=0.537, this project's empirical rate) — about 14% wider than
+  the ω≤0.15 target, not a large cost either way (b) or (c) is chosen.
+  **Recommendation (not a decision — pending co-author sign-off):**
+  option (c). Rate all 67 now, pre-register ω≤0.15 and report the
+  realized ω≈0.17 plainly alongside it — no post-hoc adjustment, no
+  wait on additional pipeline runs, rater recruitment starts immediately.
+  Option (a) is only worth it if the faithfulness sample is being
+  expanded anyway for Task 1.4, in which case this rating pass should
+  happen after that expansion, not run twice. Recorded 2026-09-14,
+  pending co-author input.
 - **Harness:** `bench/build_rating_harness.py`, allow-list field design
   (see script for the exact field list). Raters see `claim_text` and
   `evidence_rendered` only.
