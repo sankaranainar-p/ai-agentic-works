@@ -2,11 +2,16 @@
 # Pinned versions as of A6-A11 implementation
 
 # Data & ML pipeline
-numpy==2.0.2
+# Versions below are pinned to what actually reproduces docs/a7_multisystem_training_report.md
+# byte-for-byte (verified 2026-09-14, Task 0.5 reproducibility gate); the numpy/joblib/networkx
+# pins previously here (2.0.2/1.5.3/3.2.1) did not match the environment that generated it.
+numpy==2.4.6
 pandas==2.3.3
 scikit-learn==1.6.1
-networkx==3.2.1
-joblib==1.5.3
+networkx==3.6.1
+joblib==1.6.0
+pyarrow==25.0.1
+PyYAML==6.0.3
 
 # API & schemas
 pydantic==2.13.4
