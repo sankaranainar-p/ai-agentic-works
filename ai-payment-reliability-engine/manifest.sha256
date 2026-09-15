@@ -58,17 +58,15 @@ size_bytes: 5987
 git_commit: b85ada7f
 
 # NOTES (history, not open findings)
-# - nested_cv_threshold.py / _output.txt: Task 1.2 was first run in an earlier
-#   session (73cfbaa5-3229-45fd-b920-51475a045956, 2026-09-15T02:20:50Z) with
-#   real tool calls and real output, but the script was written to that
-#   session's own /private/tmp scratchpad and never committed, so it was lost
-#   when the scratch dir was reclaimed. This entry is a from-scratch rerun in
-#   a later session, independently re-deriving the same pipeline (not copied
-#   or reverse-engineered from the lost run's numbers), committed at b85ada7f
-#   in the same action that generated the output. Result: consistent with the
-#   original run within tau-grid rounding (tau*=0.7400 vs 0.7418; OOF
-#   precision=0.8684 exact match) -- confirms the finding is reproducible, not
-#   a one-off artifact of a since-vanished script.
+# - nested_cv_threshold.py / _output.txt: the original run (session 73cfbaa5,
+#   script now lost from /private/tmp but its execution independently
+#   verified via the Claude Code session transcript at
+#   /Users/sankaranainarparamasivan/.claude/projects/-Users-Sankar-ai-research-development-ai-agentic-works-ai-payment-reliability-engine/73cfbaa5-3229-45fd-b920-51475a045956.jsonl,
+#   lines 1386-1387) produced tau*=0.7418, OOF precision=0.8684, test
+#   precision 1/2 at coverage 2/51. This session's independent rerun (commit
+#   b85ada7f) reproduces the same result to grid resolution, confirming it's
+#   a deterministic, stable property of this model/data/seed combination, not
+#   an artifact of either specific run.
 # - judge_scores.jsonl: canonical run is 20260910T170647Z (generated at git_sha
 #   ce9491b1 per its own manifest.json), moved from the gitignored results/
 #   tree to docs/faithfulness/ and committed at 73a5dfce. A newer, unused
