@@ -67,6 +67,16 @@ sha256: e9e0ef8cf0c9d960faa7edf2878555caddb246e59d92e2bb93317037c80336f1
 size_bytes: 13219
 git_commit: 3f5fbb6b
 
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/loso_task1.3_normalized.py
+sha256: 901d27a79f0e12a837a64e3a98a4a0cddb60185d42234483cb63a7d57b384b70
+size_bytes: 9946
+git_commit: c712fab6
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/loso_task1.3_normalized_output.txt
+sha256: 85cfb0c343c471cf3f693ea717b99d87734fa3fb5b414bc6b6b42f90c7b84d8a
+size_bytes: 5337
+git_commit: c712fab6
+
 # NOTES (history, not open findings)
 # - loso_task1.3.py / _output.txt: Task 1.3 two-fold LOSO (RE1-OB <-> RE2-TT,
 #   RE1-SS excluded per Task 1.3a). Both folds land at or below their own
@@ -79,7 +89,23 @@ git_commit: 3f5fbb6b
 #   TT-fit standard deviations); kpi_slope_60s and ev_item_count show the same
 #   pattern at smaller magnitude; 43/46 features are unremarkable. Treat the
 #   headline LOSO numbers as provisional until these raw-count features are
-#   dropped or log/ratio-normalized and the fold is re-run -- not yet done.
+#   dropped or log/ratio-normalized and the fold is re-run -- SUPERSEDED by
+#   loso_task1.3_normalized.py below; kept as the pre-fix record, not deleted.
+# - loso_task1.3_normalized.py / _output.txt: corrected re-run of the above
+#   with kpi_co_breaching_services -> ratio (co-breaching / total distinct
+#   services in that case, since RE1-OB has 0 topology nodes so topology size
+#   can't be the denominator), kpi_slope_60s -> signed-log, ev_item_count ->
+#   log1p. Constant-classifier collapse resolves in both folds: Fold A acc
+#   0.1760->0.3360 (macro_f1 0.0607->0.2250, now above its 0.2000 baseline,
+#   was below); Fold B acc 0.1667->0.2667 (macro_f1 0.0476->0.2553, now above
+#   its 0.1667 baseline, was an exact-baseline single-class collapse). Post-
+#   fix scaler check confirms mechanism: all 3 features now sit within ~1
+#   TT-fit-std of center (was -334.8, +60.8, -9.92). Residual: kpi_co_
+#   breaching_ratio is a constant 1.0 for every RE2-TT case (the underlying
+#   "breach" test is weak enough that co-breaching count equals total-
+#   services-in-case almost always) -- scale mismatch fixed, but this one
+#   feature's within-TT informativeness stays low. Both this and the pre-fix
+#   entry above are kept in the trail per instruction; do not delete either.
 # - nested_cv_threshold.py / _output.txt: the original run (session 73cfbaa5,
 #   script now lost from /private/tmp but its execution independently
 #   verified via the Claude Code session transcript at
