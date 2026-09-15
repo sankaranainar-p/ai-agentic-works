@@ -47,7 +47,28 @@ sha256: 6dfe83c7f1c1d48496b445de76af569272fe6ece3bb29192fff46fcc09b2606d
 size_bytes: 58070
 git_commit: d3ab6a5e
 
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/nested_cv_threshold.py
+sha256: d9dde3c66099e1b5228dac5d16145b30121a2e37bbf3f9ac2f5b30df27fdc0a6
+size_bytes: 13166
+git_commit: b85ada7f
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/nested_cv_threshold_output.txt
+sha256: bd1dbb27ab1918d825d112b044bd32d66d765635045e21f57633e70b7648e887
+size_bytes: 5987
+git_commit: b85ada7f
+
 # NOTES (history, not open findings)
+# - nested_cv_threshold.py / _output.txt: Task 1.2 was first run in an earlier
+#   session (73cfbaa5-3229-45fd-b920-51475a045956, 2026-09-15T02:20:50Z) with
+#   real tool calls and real output, but the script was written to that
+#   session's own /private/tmp scratchpad and never committed, so it was lost
+#   when the scratch dir was reclaimed. This entry is a from-scratch rerun in
+#   a later session, independently re-deriving the same pipeline (not copied
+#   or reverse-engineered from the lost run's numbers), committed at b85ada7f
+#   in the same action that generated the output. Result: consistent with the
+#   original run within tau-grid rounding (tau*=0.7400 vs 0.7418; OOF
+#   precision=0.8684 exact match) -- confirms the finding is reproducible, not
+#   a one-off artifact of a since-vanished script.
 # - judge_scores.jsonl: canonical run is 20260910T170647Z (generated at git_sha
 #   ce9491b1 per its own manifest.json), moved from the gitignored results/
 #   tree to docs/faithfulness/ and committed at 73a5dfce. A newer, unused
