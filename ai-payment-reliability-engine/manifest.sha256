@@ -77,6 +77,36 @@ sha256: 85cfb0c343c471cf3f693ea717b99d87734fa3fb5b414bc6b6b42f90c7b84d8a
 size_bytes: 5337
 git_commit: c712fab6
 
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/sampling_frame.json
+sha256: 9bab27516cb282c0136ff7286bcba858c321f63dee649c65ce62afee4d9942d3
+size_bytes: 12227
+git_commit: 37f65c3a
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/drawn_sample.json
+sha256: f14a145706c051e0d459185a921432b6d74e3c7ec15c08c26d984389078791d2
+size_bytes: 2034
+git_commit: 37f65c3a
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/judge_scores_expanded.jsonl
+sha256: dd2eaddd404d94bfdbe50e6b2e9824ee275799e31c2127528400de2532c73778
+size_bytes: 146325
+git_commit: 37f65c3a
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/judge_scores_probe.jsonl
+sha256: b0a41302566c64ff5dac7202287aa61e54dbb7eeed27416d4106096c3344efca
+size_bytes: 54619
+git_commit: 37f65c3a
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/manifest.json
+sha256: f4f610d181fe73ce04337be7bd84fbf959be4ac1e4bcaac631adc754017ebf5a
+size_bytes: 3121
+git_commit: 37f65c3a
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/docs/faithfulness_task1.4/cost_ledger.jsonl
+sha256: 6772f98d9da3ce33b4b8f885204503415f7271dc8caf0492dd8f34a3629c97dc
+size_bytes: 91872
+git_commit: 37f65c3a
+
 # NOTES (history, not open findings)
 # - loso_task1.3.py / _output.txt: Task 1.3 two-fold LOSO (RE1-OB <-> RE2-TT,
 #   RE1-SS excluded per Task 1.3a). Both folds land at or below their own
@@ -129,3 +159,27 @@ git_commit: c712fab6
 #   b2_rcaeval_parity_report.csv and taxonomy.yaml actually trace to a commit
 #   at or before ce9491b1 with unchanged content since. The other 6 postdate
 #   ce9491b1 and are correctly attributed to the later commits above.
+# - docs/faithfulness_task1.4/*: Task 1.4 RE2-TT faithfulness sample expansion,
+#   promoted from the gitignored results/faithfulness_task1.4/20260915T160745Z/
+#   run to this tracked path (same promotion pattern as docs/faithfulness/ for
+#   the RE1-OB canonical study), committed at 37f65c3a. Wholly separate from
+#   docs/faithfulness/judge_scores.jsonl (RE1-OB, 67 claims) -- not merged,
+#   not appended. sampling_frame.json/drawn_sample.json record the 90-case
+#   RE2-TT frame and the seed=42 stratified 15-case draw (2-3 cases/fault
+#   class) BEFORE any claim generation. judge_scores_expanded.jsonl is the
+#   primary set (llama3.1 generator, qwen3.8:27b + NLI judges; production=34,
+#   control=20, adversarial=60, n=114). judge_scores_probe.jsonl is the
+#   10-case multi-generator probe (qwen3.8:27b generator, llama3.1 judge --
+#   swapped to preserve family separation from the alternate generator;
+#   production claims only, n=37); its claim scope supports "the stage-1
+#   bypass is not specific to Llama's instruction tuning" (both generators:
+#   100% stage1_pass_rate on the same 10 cases) and explicitly does NOT
+#   support "inherent to citation checking in general" (would need more
+#   model families and a human study). cost_ledger.jsonl is the per-call
+#   Task-1.6-instrumented record (wall_seconds/tokens_in/tokens_out/cached)
+#   for every judge call in both populations. Combined RE1-OB+RE2-TT
+#   production claims = 40+34 = 74, short of the N=88 human-rating
+#   pre-registration target by 14 (docs/human_rating_rubric.md's realized-omega
+#   entries at N=67 and N=74 cover this). Separate-vs-merged reporting for the
+#   paper (two per-dataset faithfulness figures vs. one pooled figure) is
+#   tracked as an open decision, not resolved by this promotion.
