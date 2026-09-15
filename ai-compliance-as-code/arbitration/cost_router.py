@@ -278,23 +278,52 @@ class CostSensitiveRejectRouter(ArbitrationStrategy):
         avg_error_loss = (self.c_fn + self.c_fp) / 2.0
         risk_h = effective_ch + (self.epsilon_h * avg_error_loss)
 
-        # Disagreement vs agreement risk calculation
-        if s_fired == l_fired:
-            # Agreement: detectors corroborate each other; low error probability
-            agree_err_prob = 0.02
-            cost_err = self.c_fp if s_fired else self.c_fn
-            risk_s = self.c_s + (agree_err_prob * cost_err)
-            risk_l = self.c_l + (agree_err_prob * cost_err)
-        else:
-            # Disagreement: exactly one detector fired; probability of error is 1 - p
-            # For S: if S misses (s_fired=False), error is FN with prob (1 - prob_s)
-            #        if S flags (s_fired=True), error is FP with prob (1 - prob_s)
-            s_cost_type = self.c_fp if s_fired else self.c_fn
-            risk_s = self.c_s + ((1.0 - prob_s) * s_cost_type)
+        # Extract continuous finding confidences
+        def _extract_conf(findings: Sequence[Any], default_conf: float) -> float:
+            if not findings:
+                return 0.0
+            vals: List[float] = []
+            for f in findings:
+                if isinstance(f, dict):
+                    c = f.get("confidence")
+                else:
+                    c = getattr(f, "confidence", None)
+                if c is not None:
+                    try:
+                        vals.append(max(0.0, min(1.0, float(c))))
+                    except (ValueError, TypeError):
+                        vals.append(default_conf)
+                else:
+                    vals.append(default_conf)
+            return float(sum(vals) / len(vals)) if vals else default_conf
 
-            # For L: L is wrong when S is right (prob_s)
-            l_cost_type = self.c_fp if l_fired else self.c_fn
-            risk_l = self.c_l + (prob_s * l_cost_type)
+        c_s_val = _extract_conf(static_findings, 0.60)
+        c_l_val = _extract_conf(llm_findings, 1.0)
+
+        # Disagreement vs agreement risk calculation incorporating continuous confidence
+        if s_fired == l_fired:
+            cost_err = self.c_fp if s_fired else self.c_fn
+            if s_fired:
+                agree_err_s = (1.0 - c_s_val) * 0.05
+                agree_err_l = (1.0 - c_l_val) * 0.05
+            else:
+                agree_err_s = 0.02
+                agree_err_l = 0.02
+            risk_s = self.c_s + (agree_err_s * cost_err)
+            risk_l = self.c_l + (agree_err_l * cost_err)
+        else:
+            if s_fired:
+                # S flagged, L missed: S may be FP, L missed FN
+                p_err_s = ((1.0 - prob_s) + (1.0 - c_s_val)) / 2.0
+                p_err_l = (prob_s + c_s_val) / 2.0
+                risk_s = self.c_s + (p_err_s * self.c_fp)
+                risk_l = self.c_l + (p_err_l * self.c_fn)
+            else:
+                # L flagged, S missed: L may be FP, S missed FN
+                p_err_l = (prob_s + (1.0 - c_l_val)) / 2.0
+                p_err_s = ((1.0 - prob_s) + c_l_val) / 2.0
+                risk_s = self.c_s + (p_err_s * self.c_fn)
+                risk_l = self.c_l + (p_err_l * self.c_fp)
 
         return float(risk_s), float(risk_l), float(risk_h), float(prob_s)
 

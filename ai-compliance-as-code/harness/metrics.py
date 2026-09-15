@@ -270,9 +270,10 @@ class CalibrationBin:
     mean_confidence: float
     empirical_accuracy: float
     calibration_error: float
-    margin_of_error: float
     confidence_lower: float = 0.0
     confidence_upper: float = 1.0
+    margin_of_error: float = 0.0
+    moe_95: float = 0.0
     wald_moe: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -285,6 +286,7 @@ class CalibrationBin:
             "empirical_accuracy": round(self.empirical_accuracy, 4),
             "calibration_error": round(self.calibration_error, 4),
             "margin_of_error": round(self.margin_of_error, 4),
+            "moe_95": round(self.moe_95 if self.moe_95 > 0 else self.margin_of_error, 4),
             "wald_moe": round(self.wald_moe, 4),
             "confidence_lower": round(self.confidence_lower, 4),
             "confidence_upper": round(self.confidence_upper, 4),
@@ -313,14 +315,14 @@ class CalibrationReport:
             "strategy": self.strategy,
             "num_bins": self.num_bins,
             "num_samples": self.num_samples,
-            "ece": round(self.ece, 6),
-            "mce": round(self.mce, 6),
-            "brier_score": round(self.brier_score, 6),
-            "brier_score_raw": round(self.brier_score_raw, 6),
-            "reliability": round(self.reliability, 6),
-            "resolution": round(self.resolution, 6),
-            "uncertainty": round(self.uncertainty, 6),
-            "base_rate": round(self.base_rate, 6),
+            "ece": round(self.ece, 8),
+            "mce": round(self.mce, 8),
+            "brier_score": round(self.brier_score, 10),
+            "brier_score_raw": round(self.brier_score_raw, 10),
+            "reliability": round(self.reliability, 10),
+            "resolution": round(self.resolution, 10),
+            "uncertainty": round(self.uncertainty, 10),
+            "base_rate": round(self.base_rate, 8),
             "murphy_identity_error": round(
                 abs(self.brier_score - (self.reliability - self.resolution + self.uncertainty)), 12
             ),
@@ -474,6 +476,7 @@ def compute_calibration_analysis(
                 empirical_accuracy=ym,
                 calibration_error=cal_err,
                 margin_of_error=wilson_moe,
+                moe_95=wilson_moe,
                 confidence_lower=b_lower,
                 confidence_upper=b_upper,
                 wald_moe=wald_moe,
