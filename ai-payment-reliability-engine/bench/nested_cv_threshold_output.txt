@@ -1,0 +1,87 @@
+==========================================================================================
+LOAD DATA + REPRODUCE ORIGINAL SPLIT (unchanged from tools/train_triage_model.py)
+==========================================================================================
+  [RE1-OB] 125 cases (cached)
+  [RE1-SS] 125 cases (cached)
+  [RE2-TT] 90 cases (cached)
+original split: train=204 val=68 test=51 frozen=17
+==========================================================================================
+STEP 1: PARTITION BUDGETING
+==========================================================================================
+development pool (train+val, pooled): 272  (= 204 + 68)
+reserved test split (untouched until Step 7): 51
+reserved frozen cases (never touched, this script or any prior one): 17
+PARTITION DISJOINTNESS: verified (no case appears in more than one of dev/test/frozen)
+dev pool class counts: {'cpu': 52, 'delay': 52, 'disk': 52, 'loss': 52, 'memory': 52, 'socket': 12}
+==========================================================================================
+STEP 2: PRE-FLIGHT CHECK — per-outer-fold class counts (k=5), before any metric is computed
+==========================================================================================
+fold n_held_out       cpu     delay      disk      loss    memory    socket
+   0         55        11        10        11        10        11         2
+   1         55        11        10        10        10        11         3
+   2         54        10        11        10        10        10         3
+   3         54        10        11        10        11        10         2
+   4         54        10        10        11        11        10         2
+
+minimum socket count in any held-out fold at k=5: 2
+DECISION: k=5 retained — every outer fold has >= 2 socket cases.
+
+FINAL K = 5
+==========================================================================================
+STEP 3: OUT-OF-FOLD PREDICTION (outer CV, k=5)
+==========================================================================================
+fold 0: n_train=217 n_held_out= 55  accuracy=0.3818
+fold 1: n_train=217 n_held_out= 55  accuracy=0.5273
+fold 2: n_train=218 n_held_out= 54  accuracy=0.5926
+fold 3: n_train=218 n_held_out= 54  accuracy=0.4815
+fold 4: n_train=218 n_held_out= 54  accuracy=0.4444
+
+OOF coverage: 272/272 dev cases have exactly one out-of-fold prediction (each from a model that never saw that case during training)
+==========================================================================================
+STEP 4: DEPLOYMENT ISOTONIC CALIBRATOR — fit once on all aggregated OOF points
+==========================================================================================
+isotonic calibrator fit on 272 aggregated OOF (raw_confidence, correct) pairs
+raw OOF confidence range: [0.2471, 0.9998]
+==========================================================================================
+STEP 5: THRESHOLD SWEEP ON CALIBRATED OOF PROBABILITIES (not raw scores)
+==========================================================================================
+calibrated OOF confidence range: [0.1081, 0.8684]
+(isotonic is monotone, not affine — the tau selected on the calibrated scale is not the same threshold value a raw-scale sweep would select)
+
+FINAL OPERATING POINT (selected on OOF calibrated scale, target precision 0.95):
+  tau*      = 0.7400
+  precision = 0.8684  (OOF, out-of-sample estimate)
+  recall    = 0.1213
+  abstain   = 0.8603  (coverage = 0.1397)
+==========================================================================================
+STEP 6: STABILITY REPORTING — per-fold INNER calibrator + tau sweep (diagnostic only)
+==========================================================================================
+fold 0: n= 55  inner-calibrator tau=0.5100  precision=1.0000  recall=0.1091  abstain=0.8909
+fold 1: n= 55  inner-calibrator tau=0.6700  precision=1.0000  recall=0.2000  abstain=0.8000
+fold 2: n= 54  inner-calibrator tau=0.6200  precision=0.9375  recall=0.2778  abstain=0.7037
+fold 3: n= 54  inner-calibrator tau=0.7600  precision=1.0000  recall=0.0185  abstain=0.9815
+fold 4: n= 54  inner-calibrator tau=0.7600  precision=0.8750  recall=0.1296  abstain=0.8519
+
+THRESHOLD DISPERSION ACROSS 5 FOLDS (diagnostic; this is NOT the operating point):
+  values : [0.51, 0.67, 0.62, 0.76, 0.76]
+  min=0.5100  max=0.7600  range=0.2500  mean=0.6640  std=0.0939
+  OPERATING POINT (Step 5) tau*=0.7400 for comparison
+==========================================================================================
+STEP 7: TEST EVALUATION (test split touched for the first and only time below)
+==========================================================================================
+final deployed classifier fit on the FULL 272-case dev pool (not any single outer-fold model)
+test set: n=51, accuracy=0.5098
+applying tau*=0.7400 (from Step 5, OOF-selected) to isotonic_oof-calibrated test confidences (isotonic_oof from Step 4, fit only on dev-pool OOF data):
+  kept (confidence >= tau*): numerator=1 denominator=2  (of 51 total test cases)
+  OUT-OF-SAMPLE precision = 1/2 = 0.5000
+  OUT-OF-SAMPLE recall    = 1/51 = 0.0196
+  OUT-OF-SAMPLE coverage  = 2/51 = 0.0392  (abstain=0.9608)
+==========================================================================================
+STEP 8: WILSON 95% CI FOR SMALL-n RATES
+==========================================================================================
+  test-split kept count (denominator) = 2 < 10 -- the precision point estimate is not statistically meaningful at this n.
+  Wilson 95% CI for precision = 1/2 = 0.5000: [0.0945, 0.9055]
+  CI width = 0.8109 (81.1% of the full [0,1] range) -- treat the point estimate as uninformative at this sample size, not as a stable rate.
+==========================================================================================
+DONE
+==========================================================================================
