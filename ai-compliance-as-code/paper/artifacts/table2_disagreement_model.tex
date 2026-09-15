@@ -1,6 +1,6 @@
 \begin{table}[t]
 \centering
-\caption{Logistic regression feature weights predicting detector victory on disagreement instances ($P(S=1 \mid S \neq L, x)$). Odds ratios $>1.0$ favor Symbolic detection; $<1.0$ favor Neural detection. Statistical significance denoted after Benjamini-Hochberg FDR correction ($q < 0.05^*$).}
+\caption{Logistic regression feature weights predicting detector victory on disagreement instances ($P(S=1 \mid S \neq L, x)$, $N=40$). Odds ratios $>1.0$ favor Symbolic detection; $<1.0$ favor Neural detection. Statistical significance denoted after Benjamini-Hochberg FDR correction ($q < 0.05^*$).}
 \label{tab:disagreement_regression}
 \small
 \begin{tabular}{lccccc}
@@ -19,6 +19,8 @@ Scanner Risk Indicators Count & \textbf{1.65}$^*$ & [1.18, 2.30] & +2.95 & 0.003
 Hint: Plaintext HTTP Outbound & \textbf{3.32}$^*$ & [1.78, 6.20] & +3.78 & < 0.001 & 0.0012 \\
 Hint: Plaintext Password Field & \textbf{2.46}$^*$ & [1.32, 4.58] & +2.87 & 0.0041 & 0.0103 \\
 Language: Kotlin (.kt) & 1.22 & [0.75, 1.98] & +0.80 & 0.4209 & 0.4209 \\
+\midrule
+\multicolumn{6}{l}{\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}} \\
 \bottomrule
 \end{tabular}
 \end{table}

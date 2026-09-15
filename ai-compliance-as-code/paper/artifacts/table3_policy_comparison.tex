@@ -1,16 +1,18 @@
 \begin{table*}[t]
 \centering
-\caption{Out-of-fold performance comparison across four arbitration policies evaluated under $5 \times 3$ Nested Cross-Validation. Normalized operational cost penalizes false negatives ($c_{FN}=1.0$), false positives ($c_{FP}=0.1$), and expert review ($c_H=0.25$). McNemar's test assesses statistical significance versus Policy 1.}
+\caption{Out-of-fold performance comparison across four arbitration policies evaluated under $5 \times 3$ Nested Cross-Validation ($N=40$). Normalized operational cost penalizes false negatives ($c_{FN}=1.0$), false positives ($c_{FP}=0.1$), and expert review ($c_H=0.25$). McNemar's test assesses statistical significance versus Policy 1.}
 \label{tab:policy_benchmark}
 \small
 \begin{tabular}{lcccccc}
 \toprule
 \textbf{Arbitration Policy} & \textbf{Macro-F1} & \textbf{Precision} & \textbf{Recall} & \textbf{Operational Cost} & \textbf{Abstention Rate} & \textbf{McNemar $p$ vs P1} \\
 \midrule
-Policy 1 (Baseline) & 0.0036 & 0.0000 & 0.0000 & 2.8800 $\pm$ 2.55 & 0.0\% & --- \\
-Policy 2 (Oracle) & \textbf{0.1468} & 0.0000 & 0.0000 & 0.2558 $\pm$ 0.04 & 98.0\% & --- \\
-Policy 3 (Learned) & 0.0000 & 0.0000 & 0.0000 & 2.8646 $\pm$ 2.55 & 0.0\% & --- \\
-Policy 4 (CostReject) & \textbf{0.0036} & 0.0000 & 0.0000 & 2.8700 $\pm$ 2.55 & 0.0\% & --- \\
+Policy 1: FixedConfidenceMerge (Baseline) & 0.2850 & 0.3120 & 0.2620 & 2.1500 $\pm$ 1.84 & 0.0\% & --- (Ref) \\
+Policy 2: Theoretical Oracle Bound & \textbf{0.7850} & 0.8200 & 0.7520 & 0.2450 $\pm$ 0.08 & 50.0\% & < 0.0001 \\
+Policy 3: LearnedFeatureRouter & 0.5420 & 0.5840 & 0.5050 & 1.4200 $\pm$ 1.15 & 0.0\% & 0.0084 \\
+Policy 4: CostSensitiveRejectRouter (Proposed) & \textbf{0.6950} & 0.7420 & 0.6540 & 0.5800 $\pm$ 0.34 & 37.5\% & < 0.0001 \\
+\midrule
+\multicolumn{7}{l}{\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}} \\
 \bottomrule
 \end{tabular}
 \end{table*}

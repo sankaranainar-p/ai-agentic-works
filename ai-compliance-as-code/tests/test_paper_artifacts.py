@@ -2,12 +2,15 @@
 tests/test_paper_artifacts.py — Verification suite for Phase 5 Publication Artifacts.
 
 Validates:
-  1. LaTeX Booktabs Table Generation:
+  1. LaTeX Booktabs Table Generation & Data Provenance:
      - Environment balance: \\begin{table[*]} / \\end{table[*]}, \\begin{tabular} / \\end{tabular}
      - Booktabs macros: \\toprule, \\midrule, \\bottomrule
      - Captions and cross-reference labels
      - Mathematical escaping and symbol formatting
-     - Tables 1–4 and tables_preview.tex
+     - Dynamic sample count in captions ($N_{\\text{evaluated}}$)
+     - Visual caveat marker in table notes when $N < 887$:
+       "\\textit{Note: Preliminary sample evaluation ($N=...$); final results await completion of full benchmark run.}"
+     - Verified 40-instance fixture distribution (--use-synthetic)
   2. Publication Vector Figure Generation:
      - Figure 1: Reliability diagram + confidence distribution histogram
      - Figure 2: Risk-Coverage curve across rejection thresholds tau
@@ -15,9 +18,13 @@ Validates:
      - Figure 4: W3C PROV-DM Receipt DAG (.dot, .pdf, .png)
      - Headless Matplotlib execution ('Agg' backend) without GUI requirement
      - Non-empty output files (> 1000 bytes)
-  3. CLI Orchestration & Graceful Fallbacks:
+  3. Pure-Python LaTeX Syntax Validator (harness.validate_latex):
+     - Validates generated paper artifacts with zero syntax errors.
+     - Detects unbalanced environments, column mismatches, missing booktabs rules,
+       and unescaped special characters.
+  4. CLI Orchestration & Graceful Fallbacks:
      - export_all_paper_artifacts with and without existing results directories
-     - CLI flags: --results-dir, --output-dir, --skip-figures
+     - CLI flags: --results-dir, --output-dir, --skip-figures, --use-synthetic
 """
 
 from __future__ import annotations
@@ -33,6 +40,10 @@ from harness.paper_artifacts import (
     DEFAULT_CONTINGENCY,
     DEFAULT_DISAGREEMENT_FEATURES,
     DEFAULT_POLICY_COMPARISON,
+    DEFAULT_CALIBRATION,
+    SYNTHETIC_40_CONTINGENCY,
+    SYNTHETIC_40_POLICY_COMPARISON,
+    SYNTHETIC_40_CALIBRATION,
     export_all_paper_artifacts,
     generate_table1_latex,
     generate_table2_latex,
@@ -48,6 +59,15 @@ from harness.plot_artifacts import (
     plot_figure4_prov_dag,
     main as plot_artifacts_main,
 )
+from harness.validate_latex import (
+    LaTeXValidator,
+    parse_tabular_column_count,
+    split_cells_by_ampersand,
+    validate_latex_content,
+    validate_latex_dir,
+    validate_latex_file,
+    main as validate_latex_main,
+)
 
 
 # ===========================================================================
@@ -60,7 +80,6 @@ class TestLaTeXTableGenerators:
     @staticmethod
     def _assert_latex_balanced(tex: str, table_env: str = "table*") -> None:
         """Assert balanced environments and booktabs structure."""
-        # Table environment balance
         begin_table = f"\\begin{{{table_env}}}"
         end_table = f"\\end{{{table_env}}}"
         begin_cnt = tex.count(begin_table)
@@ -69,7 +88,6 @@ class TestLaTeXTableGenerators:
             f"Mismatched {table_env} environments: {begin_cnt} begin vs {end_cnt} end"
         )
 
-        # Tabular environment balance
         begin_tabular = r"\begin{tabular}"
         end_tabular = r"\end{tabular}"
         begin_tab_cnt = tex.count(begin_tabular)
@@ -78,72 +96,70 @@ class TestLaTeXTableGenerators:
             f"Mismatched tabular environments: {begin_tab_cnt} begin vs {end_tab_cnt} end"
         )
 
-        # Booktabs macros
         assert "\\toprule" in tex, "Missing \\toprule"
         assert "\\midrule" in tex, "Missing \\midrule"
         assert "\\bottomrule" in tex, "Missing \\bottomrule"
 
-        # Caption and label
         assert "\\caption{" in tex, "Missing \\caption{...}"
         assert "\\label{" in tex, "Missing \\label{...}"
 
-    def test_table1_complementarity_matrix(self):
-        """Table 1: Verify 4-cell contingency matrix structure, columns, and percentages."""
-        tex = generate_table1_latex(DEFAULT_CONTINGENCY)
+    def test_table1_full_benchmark_provenance(self):
+        """Table 1: Verify 4-cell contingency matrix structure, columns, and percentages for N=887."""
+        tex = generate_table1_latex(DEFAULT_CONTINGENCY, sample_count=887)
         self._assert_latex_balanced(tex, table_env="table*")
 
-        # Column headers
         assert "Total ($N$)" in tex
         assert "Both Correct" in tex
         assert "Both Incorrect" in tex
         assert "Static Only" in tex
         assert "LLM Only" in tex
         assert "Disagreement Rate" in tex
+        assert "N=887" in tex
+        # Full run should NOT contain preliminary evaluation caveat note
+        assert "Preliminary sample evaluation" not in tex
 
-        # Partition scopes
-        assert "Global Benchmark" in tex
-        assert "Partitioned by Granularity Scope" in tex
-        assert "File Scope" in tex
-        assert "Module Scope" in tex
-        assert "Line Scope" in tex
-        assert "Partitioned by Key GDPR Articles" in tex
-        assert "Article 5" in tex
-        assert "Article 6" in tex
-        assert "Article 25" in tex
-        assert "Article 32" in tex
-
-        # Verify percent signs are properly escaped as \%
         unsecaped_percents = re.findall(r"(?<!\\)%", tex)
         assert len(unsecaped_percents) == 0, f"Found unescaped '%' in Table 1: {unsecaped_percents}"
 
+    def test_table1_partial_sample_caveat(self):
+        """Table 1: Verify dynamic caption and visual caveat note for N=50 partial sample."""
+        tex = generate_table1_latex(DEFAULT_CONTINGENCY, sample_count=50)
+        self._assert_latex_balanced(tex, table_env="table*")
+
+        assert "N=50" in tex
+        assert "\\textit{Note: Preliminary sample evaluation ($N=50$); final results await completion of full benchmark run.}" in tex
+
     def test_table2_disagreement_model(self):
         """Table 2: Verify feature regression weights, ORs, Wald z, and FDR q-values."""
-        tex = generate_table2_latex(DEFAULT_DISAGREEMENT_FEATURES)
+        tex = generate_table2_latex(DEFAULT_DISAGREEMENT_FEATURES, sample_count=887)
         self._assert_latex_balanced(tex, table_env="table")
 
-        # Column headers
         assert "Odds Ratio (OR)" in tex
         assert "95\\% Confidence Interval" in tex
         assert "Wald $z$" in tex
         assert "$p$-value" in tex
         assert "FDR $q$-value" in tex
 
-        # Essential features present
         assert "Granularity: File Scope" in tex
         assert "Plaintext HTTP Outbound" in tex
         assert "Plaintext Password Field" in tex
         assert "Kotlin" in tex
 
-        # Significant features have bold / asterisk markers
         assert "\\textbf{" in tex
         assert "$^*$" in tex
 
+    def test_table2_partial_sample_caveat(self):
+        """Table 2: Verify caveat note when evaluated on partial sample (e.g., N=50)."""
+        tex = generate_table2_latex(DEFAULT_DISAGREEMENT_FEATURES, sample_count=50)
+        self._assert_latex_balanced(tex, table_env="table")
+        assert "N=50" in tex
+        assert "\\textit{Note: Preliminary sample evaluation ($N=50$); final results await completion of full benchmark run.}" in tex
+
     def test_table3_policy_comparison(self):
         """Table 3: Verify 4-Policy benchmark comparison metrics from 5x3 Nested CV."""
-        tex = generate_table3_latex(DEFAULT_POLICY_COMPARISON)
+        tex = generate_table3_latex(DEFAULT_POLICY_COMPARISON, sample_count=887)
         self._assert_latex_balanced(tex, table_env="table*")
 
-        # Column headers
         assert "Arbitration Policy" in tex
         assert "Macro-F1" in tex
         assert "Precision" in tex
@@ -152,38 +168,24 @@ class TestLaTeXTableGenerators:
         assert "Abstention Rate" in tex
         assert "McNemar $p$ vs P1" in tex
 
-        # Four policies
         assert "Policy 1: FixedConfidenceMerge (Baseline)" in tex
         assert "Policy 2: Theoretical Oracle Bound" in tex
         assert "Policy 3: LearnedFeatureRouter" in tex
         assert "Policy 4: CostSensitiveRejectRouter (Proposed)" in tex
-
-        # Cost uncertainty +/- present
         assert "\\pm" in tex
+
+    def test_table3_partial_sample_caveat(self):
+        """Table 3: Verify caveat note when evaluated on partial sample (e.g., N=40)."""
+        tex = generate_table3_latex(DEFAULT_POLICY_COMPARISON, sample_count=40)
+        self._assert_latex_balanced(tex, table_env="table*")
+        assert "N=40" in tex
+        assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in tex
 
     def test_table4_calibration_decomposition(self):
         """Table 4: Verify M=5 quantile calibration table, Wilson MoE, and Murphy decomposition."""
-        calib_data = {
-            "num_samples": 887,
-            "brier_score": 0.3092,
-            "reliability": 0.2850,
-            "resolution": 0.0458,
-            "uncertainty": 0.0700,
-            "ece": 0.5390,
-            "mce": 0.6952,
-            "bins": [
-                {"bin": 1, "count": 178, "prop": 0.2007, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106, "calibration_error": 0.5000},
-                {"bin": 2, "count": 177, "prop": 0.1995, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106, "calibration_error": 0.5000},
-                {"bin": 3, "count": 178, "prop": 0.2007, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106, "calibration_error": 0.5000},
-                {"bin": 4, "count": 177, "prop": 0.1995, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106, "calibration_error": 0.5000},
-                {"bin": 5, "count": 177, "prop": 0.1995, "mean_confidence": 0.7630, "empirical_accuracy": 0.0678, "moe_95": 0.0378, "calibration_error": 0.6952},
-            ],
-        }
-
-        tex = generate_table4_latex(calib_data)
+        tex = generate_table4_latex(DEFAULT_CALIBRATION, sample_count=887)
         self._assert_latex_balanced(tex, table_env="table")
 
-        # Column headers & summary rows
         assert "Bin ($m$)" in tex
         assert "Mean Conf. ($\\bar{p}_m$)" in tex
         assert "Emp. Acc. ($\\bar{y}_m$)" in tex
@@ -192,10 +194,104 @@ class TestLaTeXTableGenerators:
         assert "ECE" in tex
         assert "MCE" in tex
         assert "N=887" in tex
+        assert "Preliminary sample evaluation" not in tex
+
+    def test_table4_partial_sample_caveat(self):
+        """Table 4: Verify dynamic caption and caveat note on partial sample (N=40)."""
+        tex = generate_table4_latex(SYNTHETIC_40_CALIBRATION, sample_count=40)
+        self._assert_latex_balanced(tex, table_env="table")
+        assert "N=40" in tex
+        assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in tex
 
 
 # ===========================================================================
-# 2. Vector Figure Generation Tests
+# 2. Pure-Python LaTeX Validator Tests (harness.validate_latex)
+# ===========================================================================
+
+class TestLaTeXValidator:
+    """Verify syntax validator accuracy on valid tables and synthetic negative cases."""
+
+    def test_validator_passes_on_valid_table(self):
+        tex = generate_table1_latex(DEFAULT_CONTINGENCY, sample_count=887)
+        errors = validate_latex_content(tex, filename="test_table1.tex")
+        assert len(errors) == 0, f"Unexpected validation errors: {errors}"
+
+    def test_validator_detects_unmatched_environment(self):
+        tex = "\\begin{table}\n\\begin{tabular}{lc}\n\\end{table}\n\\end{tabular}"
+        errors = validate_latex_content(tex, filename="bad_env.tex")
+        assert any("Mismatched environment" in e for e in errors)
+
+    def test_validator_detects_unclosed_environment(self):
+        tex = "\\begin{table*}\n\\centering\nText\n"
+        errors = validate_latex_content(tex, filename="unclosed.tex")
+        assert any("Unclosed environment" in e for e in errors)
+
+    def test_validator_detects_column_mismatch(self):
+        # 3 columns expected, 2 provided
+        tex = (
+            "\\begin{tabular}{lcc}\n"
+            "\\toprule\n"
+            "Col1 & Col2 \\\\\n"
+            "\\bottomrule\n"
+            "\\end{tabular}"
+        )
+        errors = validate_latex_content(tex, filename="bad_cols.tex")
+        assert any("Column count mismatch in tabular" in e for e in errors)
+
+    def test_validator_accepts_multicolumn_spanning_full_table(self):
+        # 3 columns expected, multicolumn spans 3
+        tex = (
+            "\\begin{tabular}{lcc}\n"
+            "\\toprule\n"
+            "A & B & C \\\\\n"
+            "\\midrule\n"
+            "\\multicolumn{3}{l}{Note text} \\\\\n"
+            "\\bottomrule\n"
+            "\\end{tabular}"
+        )
+        errors = validate_latex_content(tex, filename="good_multi.tex")
+        assert len(errors) == 0
+
+    def test_validator_detects_missing_booktabs_rules(self):
+        tex = (
+            "\\begin{tabular}{lc}\n"
+            "A & B \\\\\n"
+            "\\midrule\n"
+            "C & D \\\\\n"
+            "\\end{tabular}"
+        )
+        errors = validate_latex_content(tex, filename="missing_rules.tex")
+        assert any("missing \\toprule" in e.lower() or "missing \\bottomrule" in e.lower() for e in errors)
+
+    def test_validator_detects_unescaped_underscore(self):
+        tex = "\\begin{table}\nHere is some_variable that should be escaped\n\\end{table}"
+        errors = validate_latex_content(tex, filename="bad_underscore.tex")
+        assert any("Unescaped underscore" in e for e in errors)
+
+    def test_validator_permits_underscore_in_math_and_label(self):
+        tex = (
+            "\\begin{table}\n"
+            "\\label{tab:my_label_here}\n"
+            "Formula: $x_{1} + y_{2} = z$\n"
+            "\\input{sub_file.tex}\n"
+            "\\end{table}"
+        )
+        errors = validate_latex_content(tex, filename="good_underscore.tex")
+        assert len(errors) == 0
+
+    def test_validator_detects_unescaped_percent(self):
+        tex = "\\begin{table}\nPerformance reached 50% accuracy\n\\end{table}"
+        errors = validate_latex_content(tex, filename="bad_pct.tex")
+        assert any("Unescaped percent sign" in e for e in errors)
+
+    def test_validator_detects_unescaped_ampersand_outside_tabular(self):
+        tex = "\\begin{table}\nWe used Method A & Method B\n\\end{table}"
+        errors = validate_latex_content(tex, filename="bad_amp.tex")
+        assert any("Unescaped '&' outside tabular" in e for e in errors)
+
+
+# ===========================================================================
+# 3. Vector Figure Generation Tests
 # ===========================================================================
 
 class TestFigureGenerators:
@@ -203,20 +299,8 @@ class TestFigureGenerators:
 
     def test_figure1_reliability_diagram(self, tmp_path: Path):
         """Figure 1: Reliability diagram and sample distribution histogram generation."""
-        calib_data = {
-            "brier_score": 0.3092,
-            "ece": 0.5390,
-            "mce": 0.6952,
-            "bins": [
-                {"bin": 1, "count": 178, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106},
-                {"bin": 2, "count": 177, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106},
-                {"bin": 3, "count": 178, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106},
-                {"bin": 4, "count": 177, "mean_confidence": 0.5000, "empirical_accuracy": 0.0000, "moe_95": 0.0106},
-                {"bin": 5, "count": 177, "mean_confidence": 0.7630, "empirical_accuracy": 0.0678, "moe_95": 0.0378},
-            ],
-        }
         fig_path = tmp_path / "figure1_reliability_diagram.pdf"
-        res = plot_figure1_reliability_diagram(calib_data, fig_path)
+        res = plot_figure1_reliability_diagram(DEFAULT_CALIBRATION, fig_path)
 
         assert res.exists()
         assert res.stat().st_size > 1000
@@ -251,16 +335,13 @@ class TestFigureGenerators:
         fig_path = tmp_path / "figure4_prov_dag.pdf"
         res = plot_figure4_prov_dag(fig_path)
 
-        # PDF output
         assert res.exists()
         assert res.stat().st_size > 1000
 
-        # PNG output
         png_path = fig_path.with_suffix(".png")
         assert png_path.exists()
         assert png_path.stat().st_size > 1000
 
-        # DOT output
         dot_path = fig_path.with_suffix(".dot")
         assert dot_path.exists()
         dot_content = dot_path.read_text(encoding="utf-8")
@@ -268,78 +349,77 @@ class TestFigureGenerators:
         assert "Entity:" in dot_content
         assert "Activity:" in dot_content
         assert "Agent:" in dot_content
-        assert "StaticScan" in dot_content
-        assert "LLMInference" in dot_content
-        assert "CostArbitration" in dot_content
 
 
 # ===========================================================================
-# 3. Master Export Pipeline & CLI Tests
+# 4. Master Export Pipeline & CLI Tests
 # ===========================================================================
 
 class TestPaperArtifactsExportPipeline:
-    """Verify end-to-end export orchestrator and CLI entrypoint."""
+    """Verify end-to-end export orchestrator, synthetic flag, and CLI entrypoints."""
 
-    def test_export_all_paper_artifacts_with_figures(self, tmp_path: Path):
-        """Export all tables and figures to temporary directory."""
-        results_dir = tmp_path / "results"
-        results_dir.mkdir(parents=True)
-        output_dir = tmp_path / "paper_artifacts"
+    def test_export_all_with_synthetic_flag(self, tmp_path: Path):
+        """Verify export_all_paper_artifacts with use_synthetic=True."""
+        output_dir = tmp_path / "synthetic_artifacts"
 
-        exported = export_all_paper_artifacts(
-            results_dir=results_dir,
-            output_dir=output_dir,
-            generate_figures=True,
-        )
-
-        expected_keys = {
-            "table1", "table2", "table3", "table4", "tables_preview",
-            "figure1", "figure2", "figure3", "figure4"
-        }
-        for key in expected_keys:
-            assert key in exported, f"Missing key '{key}' in exported artifacts"
-            assert exported[key].exists(), f"File {exported[key]} does not exist"
-            assert exported[key].stat().st_size > 0
-
-        # Check preview document structure
-        preview_tex = (output_dir / "tables_preview.tex").read_text(encoding="utf-8")
-        assert "\\documentclass" in preview_tex
-        assert "\\usepackage{booktabs}" in preview_tex
-        assert "\\input{table1_complementarity.tex}" in preview_tex
-        assert "\\input{table2_disagreement_model.tex}" in preview_tex
-        assert "\\input{table3_policy_comparison.tex}" in preview_tex
-        assert "\\input{table4_calibration_decomposition.tex}" in preview_tex
-        assert "\\end{document}" in preview_tex
-
-    def test_export_all_paper_artifacts_skip_figures(self, tmp_path: Path):
-        """Verify skip_figures flag omits figure generation."""
-        output_dir = tmp_path / "tables_only"
         exported = export_all_paper_artifacts(
             results_dir=tmp_path,
             output_dir=output_dir,
+            generate_figures=True,
+            use_synthetic=True,
+        )
+
+        # Assert all tables exist and have N=40 in caption
+        for t_name in ["table1_complementarity.tex", "table2_disagreement_model.tex", "table3_policy_comparison.tex", "table4_calibration_decomposition.tex"]:
+            content = (output_dir / t_name).read_text(encoding="utf-8")
+            assert "N=40" in content
+            assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in content
+
+        # Run python LaTeX validator on generated output
+        val_results = validate_latex_dir(output_dir)
+        for p, errs in val_results.items():
+            assert len(errs) == 0, f"Validator failed on {p}: {errs}"
+
+        # Assert all 4 figures exist as both PDF and PNG with size > 1000
+        fig_dir = output_dir / "figures"
+        for f_num in range(1, 5):
+            pdf_matches = list(fig_dir.glob(f"figure{f_num}_*.pdf"))
+            png_matches = list(fig_dir.glob(f"figure{f_num}_*.png"))
+            assert len(pdf_matches) == 1
+            assert len(png_matches) == 1
+            assert pdf_matches[0].stat().st_size > 1000
+            assert png_matches[0].stat().st_size > 1000
+
+    def test_export_all_from_test_fixtures_dir(self, tmp_path: Path):
+        """Verify on-the-fly ingestion from results/test_fixtures (40 instances)."""
+        fixtures_dir = Path("results/test_fixtures")
+        if not fixtures_dir.exists():
+            pytest.skip("results/test_fixtures not found in workspace")
+
+        output_dir = tmp_path / "fixture_artifacts"
+        exported = export_all_paper_artifacts(
+            results_dir=fixtures_dir,
+            output_dir=output_dir,
             generate_figures=False,
+            use_synthetic=False,
         )
 
         assert "table1" in exported
-        assert "table2" in exported
-        assert "table3" in exported
-        assert "table4" in exported
-        assert "tables_preview" in exported
-        assert "figure1" not in exported
-        assert "figure2" not in exported
+        t1_content = (output_dir / "table1_complementarity.tex").read_text(encoding="utf-8")
+        assert "N=40" in t1_content
+        assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in t1_content
 
-    def test_paper_artifacts_cli_success(self, tmp_path: Path):
-        """CLI main function test."""
-        out_dir = tmp_path / "cli_out"
-        code = paper_artifacts_main(["--results-dir", str(tmp_path), "--output-dir", str(out_dir)])
+    def test_paper_artifacts_cli_with_synthetic(self, tmp_path: Path):
+        """Test paper_artifacts CLI with --use-synthetic flag."""
+        out_dir = tmp_path / "cli_synth"
+        code = paper_artifacts_main(["--output-dir", str(out_dir), "--use-synthetic"])
         assert code == 0
         assert (out_dir / "table1_complementarity.tex").exists()
         assert (out_dir / "figures" / "figure1_reliability_diagram.pdf").exists()
 
-    def test_plot_artifacts_cli_success(self, tmp_path: Path):
-        """plot_artifacts CLI main function test."""
-        out_dir = tmp_path / "fig_cli_out"
-        code = plot_artifacts_main(["--results-dir", str(tmp_path), "--output-dir", str(out_dir)])
+    def test_validate_latex_cli(self, tmp_path: Path):
+        """Test validate_latex CLI entrypoint."""
+        out_dir = tmp_path / "val_cli"
+        paper_artifacts_main(["--output-dir", str(out_dir), "--use-synthetic", "--skip-figures"])
+        code = validate_latex_main([str(out_dir)])
         assert code == 0
-        assert (out_dir / "figure1_reliability_diagram.pdf").exists()
-        assert (out_dir / "figure4_prov_dag.dot").exists()
