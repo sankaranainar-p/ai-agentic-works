@@ -1,0 +1,85 @@
+==========================================================================================
+LOAD DATA + APPLY FEATURE NORMALIZATION
+==========================================================================================
+  [RE1-OB] 125 cases (cached)
+  [RE1-SS] 125 cases (cached)
+  [RE2-TT] 90 cases (cached)
+RE1-OB n=125  RE2-TT n=90  (RE1-SS excluded, same as pre-fix run)
+
+computing total-distinct-services-per-case denominator (RE1-OB, RE2-TT only)...
+denominator resolved for 215 of 215 OB+TT rows (RE1-SS rows intentionally unresolved -- excluded from LOSO either way)
+
+before -> after, OB+TT rows only (min / mean / max):
+  kpi_co_breaching_services -> kpi_co_breaching_ratio
+    OB: raw min/mean/max = 13.00/13.01/14.00   fixed = 0.6842/0.9695/1.0000
+    TT: raw min/mean/max = 68.00/68.06/69.00   fixed = 1.0000/1.0000/1.0000
+  kpi_slope_60s -> signed-log
+    OB: raw min/mean/max = -69905.07/32186.37/4090470.40   fixed = -11.1549/0.1847/15.2242
+    TT: raw min/mean/max = -114961.07/-1152.94/3549.87   fixed = -11.6524/0.8669/8.1749
+  ev_item_count -> log1p
+    OB: raw min/mean/max = 0.00/30.08/40.00   fixed = 0.0000/2.7926/3.7136
+    TT: raw min/mean/max = 40.00/40.00/40.00   fixed = 3.7136/3.7136/3.7136
+==========================================================================================
+FOLD A (FIXED FEATURES): train=RE2-TT (n=90) -> test=RE1-OB (n=125)
+==========================================================================================
+per-fold majority-class baseline (test set): predict 'cpu' always -> acc=0.2000  (25/125)
+model accuracy = 0.3360   macro_f1 = 0.2250
+accuracy - baseline = +0.1360
+
+BEFORE (pre-fix, bench/loso_task1.3_output.txt): acc=0.1760  macro_f1=0.0607  baseline=0.2000
+AFTER  (this run, fixed features):               acc=0.3360  macro_f1=0.2250  baseline=0.2000
+delta accuracy: +0.1600   delta macro_f1: +0.1643
+
+prediction distribution on test set: {'memory': 63, 'disk': 24, 'loss': 17, 'delay': 16, 'cpu': 4, 'socket': 1}
+distinct classes predicted: 6 (collapse resolved -- multiple classes predicted)
+
+raw confusion table (rows=true, cols=predicted):
+pred    cpu  delay  disk  loss  memory  socket
+true                                          
+cpu       2      0     1    11      11       0
+delay     0      4    11     2       8       0
+disk      0      6    11     4       3       1
+loss      2      6     1     0      16       0
+memory    0      0     0     0      25       0
+==========================================================================================
+FOLD B (FIXED FEATURES): train=RE1-OB (n=125) -> test=RE2-TT (n=90)
+==========================================================================================
+per-fold majority-class baseline (test set): predict 'cpu' always -> acc=0.1667  (15/90)
+model accuracy = 0.2667   macro_f1 = 0.2553
+accuracy - baseline = +0.1000
+
+BEFORE (pre-fix, bench/loso_task1.3_output.txt): acc=0.1667  macro_f1=0.0476  baseline=0.1667
+AFTER  (this run, fixed features):               acc=0.2667  macro_f1=0.2553  baseline=0.1667
+delta accuracy: +0.1000   delta macro_f1: +0.2077
+
+prediction distribution on test set: {'delay': 34, 'disk': 33, 'loss': 12, 'memory': 7, 'cpu': 4}
+distinct classes predicted: 5 (collapse resolved -- multiple classes predicted)
+
+raw confusion table (rows=true, cols=predicted):
+pred    cpu  delay  disk  loss  memory
+true                                  
+cpu       2      6     4     3       0
+delay     0      6     7     2       0
+disk      0      7     7     1       0
+loss      2      5     6     2       0
+memory    0      3     1     4       7
+socket    0      7     8     0       0
+==========================================================================================
+POST-FIX SCALER CHECK (Fold A): did the 3 fixed features actually move closer to the TT-fit center?
+==========================================================================================
+  kpi_co_breaching_services    TT-fit mean=   1.0000  TT-fit scale=   1.0000  OB mean=   0.9695  OB mean in TT-fit stds =     -0.03
+  kpi_slope_60s                TT-fit mean=   1.1500  TT-fit scale=   2.6031  OB mean=   0.1847  OB mean in TT-fit stds =     -0.37
+  ev_item_count                TT-fit mean=   3.7136  TT-fit scale=   1.0000  OB mean=   2.7926  OB mean in TT-fit stds =     -0.92
+==========================================================================================
+SUMMARY
+==========================================================================================
+Fold A: BEFORE acc=0.1760 macro_f1=0.0607 baseline=0.2000  |  AFTER acc=0.3360 macro_f1=0.2250 baseline=0.2000  |  predicted-classes=6
+Fold B: BEFORE acc=0.1667 macro_f1=0.0476 baseline=0.1667  |  AFTER acc=0.2667 macro_f1=0.2553 baseline=0.1667  |  predicted-classes=5
+
+Both pre-fix and post-fix results are kept in the paper's trail: bench/loso_task1.3.py /
+_output.txt (original, provisional) and bench/loso_task1.3_normalized.py / _output.txt (this
+run, corrected features). The scaler-artifact mechanism identified in the original run's sanity
+check is what explains the difference between the two, not a change in model or methodology.
+==========================================================================================
+DONE
+==========================================================================================
