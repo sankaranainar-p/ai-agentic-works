@@ -14,13 +14,13 @@
       "description": "Personal data must be processed lawfully, fairly, and transparently; collected for specified, explicit, and legitimate purposes (purpose limitation); limited to what is necessary (data minimisation); kept accurate; stored no longer than necessary (storage limitation); and processed with appropriate security (integrity and confidentiality). The controller is accountable for demonstrating compliance.",
       "default_severity": "high",
       "sub_principles": [
-        "Art.5(1)(a) — Lawfulness, fairness, transparency",
-        "Art.5(1)(b) — Purpose limitation",
-        "Art.5(1)(c) — Data minimisation",
-        "Art.5(1)(d) — Accuracy",
-        "Art.5(1)(e) — Storage limitation",
-        "Art.5(1)(f) — Integrity and confidentiality",
-        "Art.5(2)   — Accountability"
+        "Art.5(1)(a) \u2014 Lawfulness, fairness, transparency",
+        "Art.5(1)(b) \u2014 Purpose limitation",
+        "Art.5(1)(c) \u2014 Data minimisation",
+        "Art.5(1)(d) \u2014 Accuracy",
+        "Art.5(1)(e) \u2014 Storage limitation",
+        "Art.5(1)(f) \u2014 Integrity and confidentiality",
+        "Art.5(2)   \u2014 Accountability"
       ],
       "check_hints": [
         "Personal data fields collected beyond the declared purpose of the feature",
@@ -31,9 +31,9 @@
         "Data shared with third parties without a documented legal basis or processor agreement"
       ],
       "non_compliant_patterns": [
-        "SELECT * FROM users — selecting all columns including PII when only ID is needed",
-        "console.log(user) — logging full user objects containing PII",
-        "INSERT INTO analytics (user_email, ...) — storing PII in analytics tables without purpose check",
+        "SELECT * FROM users \u2014 selecting all columns including PII when only ID is needed",
+        "console.log(user) \u2014 logging full user objects containing PII",
+        "INSERT INTO analytics (user_email, ...) \u2014 storing PII in analytics tables without purpose check",
         "No cron job or scheduled task to purge expired personal data records"
       ],
       "remediation_guidance": "Implement a Data Processing Register (ROPA). Add column-level annotations for PII fields. Enforce retention policies via scheduled jobs. Replace full-object logging with structured logging that omits or pseudonymises PII fields.",
@@ -44,22 +44,22 @@
     },
     {
       "id": "GDPR-Art.6",
-      "title": "Lawfulness of processing — legal basis",
+      "title": "Lawfulness of processing \u2014 legal basis",
       "description": "Processing of personal data is lawful only if at least one of six legal bases applies: (a) consent of the data subject; (b) performance of a contract; (c) compliance with a legal obligation; (d) protection of vital interests; (e) public task; or (f) legitimate interests of the controller, provided they are not overridden by the interests of the data subject.",
       "default_severity": "high",
       "legal_bases": [
-        "Art.6(1)(a) — Consent (must be freely given, specific, informed, unambiguous)",
-        "Art.6(1)(b) — Contract performance",
-        "Art.6(1)(c) — Legal obligation",
-        "Art.6(1)(d) — Vital interests",
-        "Art.6(1)(e) — Public task",
-        "Art.6(1)(f) — Legitimate interests (requires Legitimate Interests Assessment)"
+        "Art.6(1)(a) \u2014 Consent (must be freely given, specific, informed, unambiguous)",
+        "Art.6(1)(b) \u2014 Contract performance",
+        "Art.6(1)(c) \u2014 Legal obligation",
+        "Art.6(1)(d) \u2014 Vital interests",
+        "Art.6(1)(e) \u2014 Public task",
+        "Art.6(1)(f) \u2014 Legitimate interests (requires Legitimate Interests Assessment)"
       ],
       "check_hints": [
         "Processing of personal data with no consent gate, contract linkage, or documented legal basis",
         "Consent collected but not recorded with timestamp, version of privacy notice, and scope",
         "Processing commences before consent is confirmed (race condition in async consent flows)",
-        "Consent bundled together with terms of service — not freely given or specific",
+        "Consent bundled together with terms of service \u2014 not freely given or specific",
         "Legitimate interest used as a catch-all without a documented LIA on file",
         "Email marketing sent without explicit opt-in consent",
         "Data subject's personal data processed after consent is withdrawn"
@@ -77,6 +77,152 @@
       ]
     },
     {
+      "id": "GDPR-Art.7",
+      "title": "Conditions for consent",
+      "description": "Where processing is based on consent, the controller must be able to demonstrate that the data subject has consented. Requests for consent must be presented in an intelligible and easily accessible form, using clear and plain language. The data subject has the right to withdraw consent at any time as easily as to give it.",
+      "default_severity": "high",
+      "check_hints": [
+        "No mechanism to record timestamp, identity, and affirmative action of consent",
+        "Consent cannot be withdrawn as easily as given (missing withdrawal handler)",
+        "Pre-ticked checkboxes or bundled consent terms with contract performance"
+      ],
+      "non_compliant_patterns": [
+        "checkBox.setChecked(true) by default",
+        "No withdrawConsent() or revokeConsent() method provided in user settings",
+        "Consent required as a condition of service where not strictly necessary"
+      ],
+      "remediation_guidance": "Implement granular, unbundled opt-in consent mechanisms with easily accessible withdrawal options and verifiable consent logs.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_7/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.8",
+      "title": "Child consent conditions in relation to information society services",
+      "description": "Where the data subject is a child under 16 years (or Member State threshold not below 13), processing based on consent is lawful only if consent is given or authorized by the holder of parental responsibility. Controllers must make reasonable efforts to verify parental consent.",
+      "default_severity": "high",
+      "check_hints": [
+        "App accessible to children without age-gating or birth date verification",
+        "No parental consent verification mechanism for underage users"
+      ],
+      "non_compliant_patterns": [
+        "Collecting child profile data without age verification check",
+        "No parental email confirmation or authorization flow before activating child account"
+      ],
+      "remediation_guidance": "Implement age-verification gating and verifiable parental consent authorization flows for minors.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_8/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.9",
+      "title": "Processing of special categories of personal data",
+      "description": "Processing of personal data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, biometric data for uniquely identifying a person, health data, or sexual orientation is prohibited unless an Article 9(2) exception applies.",
+      "default_severity": "high",
+      "check_hints": [
+        "Collecting biometric, health, genetic, religious, or political data without explicit Art. 9(2) legal ground",
+        "Special category data stored in general analytics or logs without enhanced protection"
+      ],
+      "non_compliant_patterns": [
+        "Storing fingerprint or facial geometry templates without biometric consent exception",
+        "Logging medical diagnosis, prescription, or health telemetry in application logs"
+      ],
+      "remediation_guidance": "Cease processing special category personal data unless covered by an explicit Article 9(2) exemption and secured by dedicated encryption.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_9/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.12",
+      "title": "Transparent information and modalities for exercising data subject rights",
+      "description": "The controller must provide information and communications relating to data processing and data subject rights in a concise, transparent, intelligible, and easily accessible form, using clear and plain language. Information must be provided free of charge and within one month of receipt.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Opaque or convoluted privacy terms hidden behind multiple redirects",
+        "No workflow tracking to ensure data subject requests are answered within 30 days"
+      ],
+      "non_compliant_patterns": [
+        "Charging fees for standard privacy requests",
+        "No request tracking queue or SLA enforcement for privacy inquiries"
+      ],
+      "remediation_guidance": "Provide concise, layered privacy notices and establish automated request tracking ensuring responses within 30 days.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_12/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.13",
+      "title": "Information to be provided where personal data are collected from the data subject",
+      "description": "When collecting personal data directly from the data subject, the controller must provide at collection time: identity/contact details of controller and DPO, purposes and legal basis, recipients, retention period, and the existence of data subject rights.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Collecting registration fields, GPS location, or device ID without a privacy notice at the point of capture",
+        "Third-party analytics SDKs initialized without disclosing recipients to the user"
+      ],
+      "non_compliant_patterns": [
+        "Registration form submitting PII without displaying privacy policy notice or link",
+        "Tracking SDK initialized before privacy notice is displayed"
+      ],
+      "remediation_guidance": "Display in-context privacy notices with links to the full policy at every data capture point.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_13/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.14",
+      "title": "Information to be provided where personal data have not been obtained from the data subject",
+      "description": "Where data are not obtained from the data subject, the controller must inform the subject of the source, categories of personal data, purposes, and recipients within a reasonable period (at most one month), or at the latest upon first communication with the subject.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Ingesting contact lists, address books, or external broker data without notifying affected subjects",
+        "Silent enrichment of user profiles from third-party social or tracking sources"
+      ],
+      "non_compliant_patterns": [
+        "syncContacts() uploading non-user phone numbers without notification mechanism",
+        "Third-party marketing data merged into profiles without notifying the data subject"
+      ],
+      "remediation_guidance": "Send privacy notices to indirectly acquired contacts within 30 days, or avoid storing third-party PII without a communication channel.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_14/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.15",
+      "title": "Right of access by the data subject",
+      "description": "The data subject has the right to obtain confirmation as to whether their personal data are being processed and access to a copy of their personal data, along with details of processing purposes, categories, recipients, and retention periods.",
+      "default_severity": "medium",
+      "check_hints": [
+        "No endpoint or interface allowing users to view or export a full copy of their personal data",
+        "Data access reports omit secondary data, analytics profiles, or behavioral tracking logs"
+      ],
+      "non_compliant_patterns": [
+        "GET /profile returns basic fields while hidden profiling records are withheld",
+        "Absence of a self-service data download endpoint"
+      ],
+      "remediation_guidance": "Implement a comprehensive Data Subject Access Request (DSAR) export service providing complete personal data records.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_15/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.16",
+      "title": "Right to rectification",
+      "description": "The data subject has the right to obtain from the controller without undue delay the rectification of inaccurate personal data concerning them, and the completion of incomplete personal data.",
+      "default_severity": "medium",
+      "check_hints": [
+        "User profile attributes are immutable and cannot be updated by the user or support",
+        "Downstream replicas or search caches do not sync when personal data is corrected"
+      ],
+      "non_compliant_patterns": [
+        "API rejects updates to core profile fields such as name, email, or address",
+        "No event emission to propagate profile corrections to downstream systems"
+      ],
+      "remediation_guidance": "Provide user-facing profile correction endpoints and propagate updates to all data stores and third-party processors.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_16/oj"
+      ]
+    },
+    {
       "id": "GDPR-Art.17",
       "title": "Right to erasure ('right to be forgotten')",
       "description": "Data subjects have the right to obtain erasure of their personal data without undue delay when: the data is no longer necessary for the purpose collected; consent is withdrawn and no other legal basis applies; the subject objects and there is no overriding legitimate interest; the data was unlawfully processed; or erasure is required by law. The controller must also inform any processors or third parties to whom data was disclosed.",
@@ -85,14 +231,14 @@
         "No erasure endpoint or handler (e.g. DELETE /users/{id} or AccountDeletionService)",
         "Erasure handler deletes from primary table but leaves PII in: audit logs, analytics tables, search indexes, data warehouse, backups, CDN caches, or third-party integrations",
         "Erasure is soft-delete only (deleted_at flag) with PII still readable in the database",
-        "No propagation to downstream processors — third-party services not notified on erasure",
+        "No propagation to downstream processors \u2014 third-party services not notified on erasure",
         "Erasure request queued but no SLA enforced (GDPR requires 'without undue delay', max 30 days)",
         "Pseudonymisation used for erasure but a re-identification key is retained",
         "No mechanism to handle erasure of data in event-sourced systems or immutable logs"
       ],
       "non_compliant_patterns": [
-        "UPDATE users SET deleted_at = NOW() WHERE id = ? — soft delete, PII still in DB",
-        "DELETE FROM users WHERE id = ? — primary table only, backup/analytics not cleaned",
+        "UPDATE users SET deleted_at = NOW() WHERE id = ? \u2014 soft delete, PII still in DB",
+        "DELETE FROM users WHERE id = ? \u2014 primary table only, backup/analytics not cleaned",
         "No call to stripe.customers.del(), sendgrid suppression list, or similar on account deletion",
         "Erasure handler returns 200 OK without verifying all data stores were cleared"
       ],
@@ -103,9 +249,81 @@
       ]
     },
     {
+      "id": "GDPR-Art.18",
+      "title": "Right to restriction of processing",
+      "description": "The data subject has the right to obtain restriction of processing where accuracy is contested, processing is unlawful, data are needed for legal claims, or pending objection verification. Restricted data may only be stored, not further processed.",
+      "default_severity": "medium",
+      "check_hints": [
+        "No mechanism or database flag to pause processing on disputed personal data records",
+        "Restricted accounts continue to be processed in background analytics or batch jobs"
+      ],
+      "non_compliant_patterns": [
+        "Disputed account records processed normally by marketing or automated billing jobs",
+        "Absence of processing_restricted boolean column on user models"
+      ],
+      "remediation_guidance": "Introduce a processing_restricted flag in data models and gate all automated workflows to skip restricted records.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_18/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.20",
+      "title": "Right to data portability",
+      "description": "The data subject has the right to receive personal data concerning them in a structured, commonly used, and machine-readable format (e.g. JSON, CSV), and have it transmitted directly to another controller where technically feasible.",
+      "default_severity": "low",
+      "check_hints": [
+        "Data export only offered in non-machine-readable formats such as static PDF or screenshots",
+        "Absence of automated export endpoint for user-provided data"
+      ],
+      "non_compliant_patterns": [
+        "exportUserData() outputs non-standard proprietary binary or image format",
+        "No structured data download handler for user transaction and activity history"
+      ],
+      "remediation_guidance": "Provide an asynchronous download endpoint that packages user-generated data into standard JSON or CSV files.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_20/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.21",
+      "title": "Right to object",
+      "description": "The data subject has the right to object at any time to processing based on legitimate interests or public tasks, and an absolute right to object to processing for direct marketing, including profiling.",
+      "default_severity": "high",
+      "check_hints": [
+        "No opt-out toggle for direct marketing, targeted ads, or behavioral analytics",
+        "Marketing notifications sent after user has opted out or unsubscribed"
+      ],
+      "non_compliant_patterns": [
+        "Push notification dispatched without checking marketingOptOut status",
+        "No unsubscribe or objection webhook handler"
+      ],
+      "remediation_guidance": "Add opt-out controls in account settings; immediately halt direct marketing and profiling upon objection.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_21/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.22",
+      "title": "Automated individual decision-making, including profiling",
+      "description": "The data subject has the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects or similarly significant impacts, unless authorized with suitable safeguards including human intervention.",
+      "default_severity": "high",
+      "check_hints": [
+        "Automated credit scoring, loan rejection, or account banning without human review mechanism",
+        "No facility for data subjects to contest automated decisions or express their point of view"
+      ],
+      "non_compliant_patterns": [
+        "if (riskScore > threshold) terminateAccount() with no appeal workflow",
+        "AI model automated decisions executed with no human-in-the-loop review mechanism"
+      ],
+      "remediation_guidance": "Incorporate human-in-the-loop review for high-impact decisions and provide an appeal interface for users.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_22/oj"
+      ]
+    },
+    {
       "id": "GDPR-Art.25",
       "title": "Data protection by design and by default",
-      "description": "Controllers must implement appropriate technical and organisational measures both at the time of designing the processing system and at the time of processing itself. By default, only personal data necessary for each specific purpose must be processed — this applies to the amount collected, the extent of processing, the storage period, and accessibility.",
+      "description": "Controllers must implement appropriate technical and organisational measures both at the time of designing the processing system and at the time of processing itself. By default, only personal data necessary for each specific purpose must be processed \u2014 this applies to the amount collected, the extent of processing, the storage period, and accessibility.",
       "default_severity": "medium",
       "check_hints": [
         "No pseudonymisation or encryption applied to personal data fields in database models",
@@ -119,10 +337,10 @@
       ],
       "non_compliant_patterns": [
         "GET /api/users returns { id, name, email, phone, address, dob } to all authenticated callers",
-        "router.get('/search?query=john.doe@example.com') — PII in URL",
+        "router.get('/search?query=john.doe@example.com') \u2014 PII in URL",
         "User object passed directly to analytics SDK: analytics.identify(user)",
         "No @Encrypted or @Pseudonymised annotation on PII columns in ORM models",
-        "Role check absent: if (user.isAdmin) — missing for read paths on personal data"
+        "Role check absent: if (user.isAdmin) \u2014 missing for read paths on personal data"
       ],
       "remediation_guidance": "Apply the principle of least privilege at both the API (response shaping) and database (column-level grants) layers. Use pseudonymisation for analytics. Annotate PII fields in data models and enforce encryption at the ORM layer. Make privacy-preserving options the default (opt-in, not opt-out).",
       "references": [
@@ -131,15 +349,51 @@
       ]
     },
     {
+      "id": "GDPR-Art.28",
+      "title": "Processor obligations and vendor compliance",
+      "description": "Controllers must only use processors providing sufficient guarantees to implement appropriate technical and organisational measures. Processing must be governed by a binding contract (Data Processing Agreement / DPA) specifying data scope and obligations.",
+      "default_severity": "medium",
+      "check_hints": [
+        "Sharing personal data with third-party SDKs, APIs, or SaaS vendors without DPA verification",
+        "Sub-processor onboarding without security assessment or contractual compliance terms"
+      ],
+      "non_compliant_patterns": [
+        "Transmitting raw user telemetry to third-party crash reporting service without processor agreement",
+        "Hardcoded third-party tracker sharing device identifiers without processor gate"
+      ],
+      "remediation_guidance": "Verify and record Data Processing Agreements (DPAs) with all external services and SDKs processing personal data.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_28/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.30",
+      "title": "Records of processing activities (ROPA)",
+      "description": "Each controller and processor must maintain a record of processing activities under its responsibility, documenting purposes, data subject categories, personal data categories, recipients, transfers, retention periods, and security measures.",
+      "default_severity": "low",
+      "check_hints": [
+        "Personal data processing pipelines with no corresponding documentation in processing register",
+        "New database models or messaging topics containing PII undocumented in data catalog"
+      ],
+      "non_compliant_patterns": [
+        "Creating database table user_biometrics with no schema documentation or ROPA tag",
+        "Unregistered message queue emitting PII events without catalog entry"
+      ],
+      "remediation_guidance": "Maintain an automated metadata catalog tagging every data model and pipeline with purpose, retention, and legal basis.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_30/oj"
+      ]
+    },
+    {
       "id": "GDPR-Art.32",
       "title": "Security of processing",
       "description": "Controllers and processors must implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk, including: pseudonymisation and encryption of personal data; ongoing confidentiality, integrity, availability, and resilience of systems; ability to restore data after an incident; and regular testing and evaluation of security measures.",
       "default_severity": "high",
       "security_measures": [
-        "Art.32(1)(a) — Pseudonymisation and encryption",
-        "Art.32(1)(b) — Ongoing confidentiality, integrity, availability, resilience",
-        "Art.32(1)(c) — Ability to restore availability after an incident",
-        "Art.32(1)(d) — Regular testing, assessing, and evaluating effectiveness"
+        "Art.32(1)(a) \u2014 Pseudonymisation and encryption",
+        "Art.32(1)(b) \u2014 Ongoing confidentiality, integrity, availability, resilience",
+        "Art.32(1)(c) \u2014 Ability to restore availability after an incident",
+        "Art.32(1)(d) \u2014 Regular testing, assessing, and evaluating effectiveness"
       ],
       "check_hints": [
         "Personal data stored in plaintext in the database (no encryption at rest)",
@@ -154,19 +408,91 @@
         "No rate limiting or brute-force protection on authentication endpoints"
       ],
       "non_compliant_patterns": [
-        "password_hash = md5(password) — weak hashing algorithm",
-        "requests.get(url, verify=False) — TLS validation disabled",
-        "SECRET_KEY = 'hardcoded-secret-key-123' — hardcoded secret",
-        "AES cipher initialised in ECB mode — does not provide semantic security",
-        "jwt.decode(token, options={'verify_signature': False}) — signature not verified",
-        "db.connect('mysql://user:password@host/db') — credentials in connection string",
-        "No bcrypt/argon2/scrypt usage for password storage — plain SHA-256 used"
+        "password_hash = md5(password) \u2014 weak hashing algorithm",
+        "requests.get(url, verify=False) \u2014 TLS validation disabled",
+        "SECRET_KEY = 'hardcoded-secret-key-123' \u2014 hardcoded secret",
+        "AES cipher initialised in ECB mode \u2014 does not provide semantic security",
+        "jwt.decode(token, options={'verify_signature': False}) \u2014 signature not verified",
+        "db.connect('mysql://user:password@host/db') \u2014 credentials in connection string",
+        "No bcrypt/argon2/scrypt usage for password storage \u2014 plain SHA-256 used"
       ],
       "remediation_guidance": "Use bcrypt, Argon2id, or scrypt for password hashing. Enforce TLS 1.2+ with valid certificates. Store secrets in a secrets manager (Vault, AWS Secrets Manager). Use AES-256-GCM for data at rest. Implement key rotation policies. Add anomaly detection alerts for unusual access patterns on personal data stores.",
       "references": [
         "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3383-1-1",
         "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-012021-examples-personal-data-breach-notification_en",
         "https://owasp.org/www-project-top-ten/"
+      ]
+    },
+    {
+      "id": "GDPR-Art.33",
+      "title": "Notification of personal data breach to supervisory authority",
+      "description": "In the case of a personal data breach, the controller must notify the competent supervisory authority without undue delay and, where feasible, within 72 hours after becoming aware of it, unless unlikely to risk individuals rights and freedoms.",
+      "default_severity": "high",
+      "check_hints": [
+        "No automated security incident logging or escalation pipeline to trigger 72-hour notice window",
+        "Data leak exception swallowed or logged at debug level without notifying security operations"
+      ],
+      "non_compliant_patterns": [
+        "catch (DataLeakException e) { /* silently ignore */ }",
+        "No security alerting for mass exfiltration or unauthorized database dumps"
+      ],
+      "remediation_guidance": "Implement real-time alerting for data exfiltration anomalies and automated security incident triage workflows.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_33/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.34",
+      "title": "Communication of personal data breach to the data subject",
+      "description": "When a personal data breach is likely to result in a high risk to the rights and freedoms of natural persons, the controller must communicate the breach to the data subject without undue delay in clear and plain language.",
+      "default_severity": "high",
+      "check_hints": [
+        "No customer breach notification template or automated broadcast communication channel",
+        "Failure to alert affected users when plaintext passwords or financial records are compromised"
+      ],
+      "non_compliant_patterns": [
+        "Security incident handled internally with no communication to compromised accounts",
+        "No mechanism to broadcast security advisories to impacted users"
+      ],
+      "remediation_guidance": "Establish pre-approved customer breach notification templates and broadcast communication protocols for security incidents.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_34/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.44",
+      "title": "General principle for transfers of personal data to third countries",
+      "description": "Any transfer of personal data to a third country or international organization may take place only if conditions in Chapter V are complied with, ensuring the level of protection guaranteed by GDPR is not undermined.",
+      "default_severity": "high",
+      "check_hints": [
+        "Direct API calls transmitting EU personal data to foreign servers lacking adequacy decisions or SCCs",
+        "Cloud storage bucket or database located in non-adequate jurisdiction without transfer safeguards"
+      ],
+      "non_compliant_patterns": [
+        "uploadToS3(\"us-east-1\", euUserData) without transfer safeguards or encryption",
+        "Calling overseas tracking endpoint with raw EU user IP and device data"
+      ],
+      "remediation_guidance": "Enforce regional routing and ensure cross-border transfers to non-adequate third countries utilize Standard Contractual Clauses (SCCs).",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_44/oj"
+      ]
+    },
+    {
+      "id": "GDPR-Art.49",
+      "title": "Derogations for specific situations (cross-border transfers)",
+      "description": "In the absence of an adequacy decision or appropriate safeguards, transfer to a third country is permitted only on specific grounds, such as explicit informed consent of the data subject or necessary performance of a contract.",
+      "default_severity": "high",
+      "check_hints": [
+        "Invoking cross-border transfer without explicit data subject consent or contract necessity justification",
+        "Using Article 49 derogations for repetitive, mass data transfers rather than occasional exceptions"
+      ],
+      "non_compliant_patterns": [
+        "Transferring entire user database overseas under one-time consent claim",
+        "Routine automated background sync to non-adequate servers without contract necessity check"
+      ],
+      "remediation_guidance": "Obtain explicit informed consent specifying transfer risks, or restrict cross-border transfers to strictly occasional non-repetitive cases.",
+      "references": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/art_49/oj"
       ]
     }
   ]

@@ -229,15 +229,16 @@ def _instruction_block(regulation_name: str) -> str:
         "INSTRUCTIONS\n"
         "────────────────────────────────────────────────────────────────\n"
         f"1. Review the code above for {regulation_name} compliance violations.\n"
-        "2. Use the pre-scan findings and focus areas above as your starting point,\n"
+        "2. Identify ALL applicable GDPR articles that apply to this snippet; return an exhaustive list and do not stop at the first detected violation.\n"
+        "3. Use the pre-scan findings and focus areas above as your starting point,\n"
         "   but do NOT limit your analysis to them — scan the full file.\n"
-        "3. For each violation found, produce one JSON object matching the schema\n"
+        "4. For each violation found, produce one JSON object matching the schema\n"
         "   defined in your system prompt. Include line_start and line_end wherever\n"
         "   possible; set them to null only when the violation is structural.\n"
-        "4. If a pre-scan finding turns out NOT to be a violation in context,\n"
+        "5. If a pre-scan finding turns out NOT to be a violation in context,\n"
         "   you may omit it — do not force a finding.\n"
-        "5. Order findings by severity descending: high → medium → low.\n"
-        "6. Return ONLY the JSON array. No markdown fences, no explanation text."
+        "6. Order findings by severity descending: high → medium → low.\n"
+        "7. Return ONLY the JSON array. No markdown fences, no explanation text."
     )
 
 

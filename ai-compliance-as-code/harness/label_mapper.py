@@ -13,8 +13,10 @@ from typing import Any, Iterable, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
-# Known GDPR articles covered by our system's rule pack
-DEFAULT_SUPPORTED_ARTICLES: Set[int] = {5, 6, 17, 25, 32}
+# Known GDPR articles covered by our system's rule pack (all 23 benchmark articles)
+DEFAULT_SUPPORTED_ARTICLES: Set[int] = {
+    5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 25, 28, 30, 32, 33, 34, 44, 49
+}
 DEFAULT_SUPPORTED_RULES: Set[str] = {
     f"GDPR-Art.{art}" for art in DEFAULT_SUPPORTED_ARTICLES
 }
