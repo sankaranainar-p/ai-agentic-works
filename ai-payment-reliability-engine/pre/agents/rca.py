@@ -136,6 +136,7 @@ class RCAAgent:
         model_digest: str = "ollama:llama3.1",
         top_k: int = 12,
         seed: int = 0,
+        max_tokens: int = 900,
     ) -> RCAResult:
         """Prompt an LLM with the top-k evidence items and parse an RCAResult.
 
@@ -159,9 +160,18 @@ class RCAAgent:
             prompt=prompt,
             model_digest=model_digest,
             system_prompt=_RCA_SYSTEM,
-            max_tokens=900,
+            max_tokens=max_tokens,
             seed=seed,
         )
+        if resp.truncated and not resp.text.strip():
+            # A reasoning-model generator (e.g. a "thinking" family) can burn the
+            # entire budget on hidden <think> content before any JSON is emitted.
+            # One retry at 3x the budget, same pattern as the chat judge's retry
+            # (bench/faithfulness.py CHAT_JUDGE_RETRY_MAX_TOKENS).
+            resp = llm_client.call(
+                prompt=prompt, model_digest=model_digest, system_prompt=_RCA_SYSTEM,
+                max_tokens=max_tokens * 3, seed=seed,
+            )
         parsed = _extract_json_object(resp.text)
 
         claims: list[Claim] = []
