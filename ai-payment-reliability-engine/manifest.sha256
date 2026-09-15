@@ -57,7 +57,29 @@ sha256: bd1dbb27ab1918d825d112b044bd32d66d765635045e21f57633e70b7648e887
 size_bytes: 5987
 git_commit: b85ada7f
 
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/loso_task1.3.py
+sha256: 2abf83a97683bdbd077f18cd56f9a43d38306227f4e2eb027815dfc11bc6624f
+size_bytes: 13161
+git_commit: 3f5fbb6b
+
+path: /Users/Sankar/ai-research-development/ai-agentic-works/ai-payment-reliability-engine/bench/loso_task1.3_output.txt
+sha256: e9e0ef8cf0c9d960faa7edf2878555caddb246e59d92e2bb93317037c80336f1
+size_bytes: 13219
+git_commit: 3f5fbb6b
+
 # NOTES (history, not open findings)
+# - loso_task1.3.py / _output.txt: Task 1.3 two-fold LOSO (RE1-OB <-> RE2-TT,
+#   RE1-SS excluded per Task 1.3a). Both folds land at or below their own
+#   majority-class baseline (Fold A 0.1760 < 0.2000; Fold B 0.1667 == baseline,
+#   total collapse to one predicted class). The script's own scaler-
+#   distribution sanity check attributes this substantially to a scaling
+#   artifact, not a clean transfer-failure result: kpi_co_breaching_services
+#   (a raw, unnormalized count) is near-constant within each system but at a
+#   very different magnitude between systems (OB's raw mean lands at -334.8
+#   TT-fit standard deviations); kpi_slope_60s and ev_item_count show the same
+#   pattern at smaller magnitude; 43/46 features are unremarkable. Treat the
+#   headline LOSO numbers as provisional until these raw-count features are
+#   dropped or log/ratio-normalized and the fold is re-run -- not yet done.
 # - nested_cv_threshold.py / _output.txt: the original run (session 73cfbaa5,
 #   script now lost from /private/tmp but its execution independently
 #   verified via the Claude Code session transcript at
