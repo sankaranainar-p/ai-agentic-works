@@ -107,6 +107,32 @@
 
 ---
 
+## Paper Write-Up: V-B/VI-B Need Reframing Around Task 1.2 (tracked 2026-09-15, not yet drafted)
+
+**Issue**: V-B and VI-B (sections not in this repo — manuscript lives elsewhere) report the
+in-sample threshold result from `tools/train_triage_model.py`: validation ECE 0.000,
+precision 0.867. That number is leak-inflated — the isotonic calibrator and the tau sweep
+both see the same validation split. Task 1.2's nested-CV rerun
+(`bench/nested_cv_threshold.py`, commit `b85ada7f`, tracked in `manifest.sha256`)
+establishes the honest out-of-sample numbers.
+
+**What changes**:
+- **V-B**: replace the in-sample result with the OOF operating point —
+  tau\*=0.7418, precision=0.8684, recall=0.1213, coverage=13.97%. Flag explicitly that
+  0.8684 lands close to the old 0.867 by coincidence — precision looks stable but
+  recall/coverage did not; don't let the similar number imply nothing changed.
+- **VI-B**: the current discussion likely reads as "precision holds near target." Needs to
+  state instead: the one-time test-split check of this operating point produced 1/2
+  correct (Wilson 95% CI [0.0945, 0.9055] — not statistically meaningful at n=2), so the
+  0.95 target precision claim is neither confirmed nor refuted at deployment scale, and
+  usable coverage tops out around 14%. This is Sprint 1's headline negative result, not a
+  footnote.
+
+**Status**: recommendation only, not yet written into the manuscript. Don't let this get
+buried under Sprint 1 momentum the way the RQ-numbering item nearly did.
+
+---
+
 ## Requirements.txt Now Pinned
 
 `requirements.txt` created with:
