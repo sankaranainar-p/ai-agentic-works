@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Audit sufficiency and verdict reconstructability: backward minimality ablation on the redacted audit record $R$ (Contribution C3), $N=40$. $\Delta_{\text{rec}} = \text{Acc}(V(R)) - \text{Acc}(V(R_{\text{permuted}}))$ isolates record-driven reconstruction from a fixed label prior; $R^*$ marks the field set surviving backward elimination at $\geq 90\%$ retention.}
+\label{tab:reconstructability_ablation}
+\small
+\begin{tabular}{llccc}
+\toprule
+\textbf{Configuration} & \textbf{Retained Fields} & \textbf{Accuracy} & \textbf{Retention \%} & \textbf{$R^*$} \\
+\midrule
+Full Record $R$ & $\mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$ & 90.0\% & 100.0\% & -- \\
+\textbf{$R \setminus \{\Pi_{\text{decision}}\}$} & \textbf{$\mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$} & \textbf{90.0\%} & \textbf{100.0\%} & \textbf{\checkmark} \\
+$R \setminus \{\mathcal{P}_{\text{static}}\}$ & $\mathcal{G}_{\text{AST}} + \Pi_{\text{decision}}$ & 55.0\% & 61.1\% & -- \\
+\textbf{$R \setminus \{\mathcal{G}_{\text{AST}}\}$} & \textbf{$\mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$} & \textbf{90.0\%} & \textbf{100.0\%} & \textbf{\checkmark} \\
+Scrambled Baseline $R_{\text{permuted}}$ & None (Scrambled $\mathcal{G}_{\text{AST}}$) & 57.5\% & 63.9\% & -- \\
+\midrule
+\multicolumn{5}{l}{\textbf{Permutation baseline:} $\text{Acc}(V(R))=90.0\%$, $\text{Acc}(V(R_{\text{permuted}}))=57.5\%$, $\Delta_{\text{rec}}=+32.5\%$} \\
+\multicolumn{5}{l}{\textbf{Fallback/timeout reconstructability:} 100.0\% ($N=10$ simulated-timeout instances)} \\
+\multicolumn{5}{l}{\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}} \\
+\bottomrule
+\end{tabular}
+\end{table}

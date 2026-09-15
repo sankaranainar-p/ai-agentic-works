@@ -41,14 +41,17 @@ from harness.paper_artifacts import (
     DEFAULT_DISAGREEMENT_FEATURES,
     DEFAULT_POLICY_COMPARISON,
     DEFAULT_CALIBRATION,
+    DEFAULT_ABLATION,
     SYNTHETIC_40_CONTINGENCY,
     SYNTHETIC_40_POLICY_COMPARISON,
     SYNTHETIC_40_CALIBRATION,
+    SYNTHETIC_40_ABLATION,
     export_all_paper_artifacts,
     generate_table1_latex,
     generate_table2_latex,
     generate_table3_latex,
     generate_table4_latex,
+    generate_table5_latex,
     main as paper_artifacts_main,
 )
 from harness.plot_artifacts import (
@@ -199,6 +202,27 @@ class TestLaTeXTableGenerators:
     def test_table4_partial_sample_caveat(self):
         """Table 4: Verify dynamic caption and caveat note on partial sample (N=40)."""
         tex = generate_table4_latex(SYNTHETIC_40_CALIBRATION, sample_count=40)
+        self._assert_latex_balanced(tex, table_env="table")
+        assert "N=40" in tex
+        assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in tex
+
+    def test_table5_reconstructability_ablation(self):
+        """Table 5: Verify backward minimality ablation table, R* checkmarks, and permutation baseline."""
+        tex = generate_table5_latex(DEFAULT_ABLATION, sample_count=887)
+        self._assert_latex_balanced(tex, table_env="table")
+
+        assert "Configuration" in tex
+        assert "Retained Fields" in tex
+        assert "Accuracy" in tex
+        assert "Retention \\%" in tex
+        assert "R^*" in tex
+        assert "Permutation baseline:" in tex
+        assert "Fallback/timeout reconstructability:" in tex
+        assert "Preliminary sample evaluation" not in tex
+
+    def test_table5_partial_sample_caveat(self):
+        """Table 5: Verify dynamic caption and caveat note on partial sample (N=40)."""
+        tex = generate_table5_latex(SYNTHETIC_40_ABLATION, sample_count=40)
         self._assert_latex_balanced(tex, table_env="table")
         assert "N=40" in tex
         assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in tex
@@ -370,7 +394,13 @@ class TestPaperArtifactsExportPipeline:
         )
 
         # Assert all tables exist and have N=40 in caption
-        for t_name in ["table1_complementarity.tex", "table2_disagreement_model.tex", "table3_policy_comparison.tex", "table4_calibration_decomposition.tex"]:
+        for t_name in [
+            "table1_complementarity.tex",
+            "table2_disagreement_model.tex",
+            "table3_policy_comparison.tex",
+            "table4_calibration_decomposition.tex",
+            "table5_reconstructability_ablation.tex",
+        ]:
             content = (output_dir / t_name).read_text(encoding="utf-8")
             assert "N=40" in content
             assert "\\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in content
