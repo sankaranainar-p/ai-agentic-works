@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
@@ -23,6 +24,7 @@ import numpy as np
 
 from pre.agents.evidence import EvidencePack
 from pre.agents.rca import Claim, RCAResult
+from pre.audit.ledger import Ledger, StepOutcome
 from pre.llm.client import LLMClient
 
 
@@ -115,6 +117,10 @@ class FaithfulnessScore:
     judge_output: str  # Raw judge output for later analysis
     overall_faithful: bool  # True if both stages pass
     stage2_valid: bool = True  # False if the judge reply was truncated/unparseable
+    wall_seconds: float = 0.0  # stage-2 judge call wall-clock (0.0 if stage 1 failed, no call made)
+    cached: bool = False  # stage-2 judge reply served from pre/llm/client.py's disk cache
+    tokens_in: int = 0  # prompt tokens (chat judge only; NLI has no LLMClient call, stays 0)
+    tokens_out: int = 0  # generated tokens (chat judge only; NLI stays 0)
 
 
 class FaithfulnessChecker:
@@ -130,12 +136,26 @@ class FaithfulnessChecker:
         *,
         chat_model_digest: str = DEFAULT_CHAT_JUDGE_DIGEST,
         llm_client: Optional[LLMClient] = None,
+        ledger: Optional[Ledger] = None,
+        case_id: Optional[str] = None,
     ):
         self.evidence_pack = evidence_pack
         self.judge_backend = judge_backend
         self.chat_model_digest = chat_model_digest
         self._llm_client = llm_client
         self.evidence_by_id = {item.id: item for item in evidence_pack.items}
+        self.ledger = ledger  # optional cost/timing ledger, Task 1.6
+        self.case_id = case_id
+
+    def _record(self, step_name: str, wall_seconds: float, tokens_used: int, detail: dict) -> None:
+        if self.ledger is None:
+            return
+        if self.case_id is not None:
+            detail = {**detail, "case_id": self.case_id}
+        self.ledger.record(StepOutcome(
+            step_name=step_name, success=True, wall_seconds=wall_seconds,
+            tokens_used=tokens_used, detail=detail,
+        ))
 
     @property
     def llm_client(self) -> LLMClient:
@@ -169,13 +189,15 @@ class FaithfulnessChecker:
 
         return True, "All evidence IDs present and anomalous"
 
-    def stage2_check(self, claim: Claim) -> tuple[float, str, bool]:
+    def stage2_check(self, claim: Claim) -> tuple[float, str, bool, float, bool, int, int]:
         """Stage 2: Run entailment judge.
 
         Returns:
-            (score: float [0, 1], raw_output: str, valid: bool)
+            (score: float [0, 1], raw_output: str, valid: bool, wall_seconds: float,
+             cached: bool, tokens_in: int, tokens_out: int)
             `valid` is False when the judge reply could not be trusted
-            (truncated after retry, or unparseable).
+            (truncated after retry, or unparseable). tokens_in/tokens_out are
+            always 0 for the NLI backend (no LLMClient call in that path).
         """
         evidence_texts = [
             self.evidence_by_id[eid].description
@@ -184,7 +206,7 @@ class FaithfulnessChecker:
         ]
 
         if not evidence_texts:
-            return 0.0, "No evidence texts available", False
+            return 0.0, "No evidence texts available", False, 0.0, False, 0, 0
 
         combined_evidence = " | ".join(evidence_texts)
 
@@ -192,7 +214,7 @@ class FaithfulnessChecker:
             return self._judge_nli(combined_evidence, claim.text)
         return self._judge_chat(combined_evidence, claim.text)
 
-    def _judge_nli(self, evidence_text: str, claim_text: str) -> tuple[float, str, bool]:
+    def _judge_nli(self, evidence_text: str, claim_text: str) -> tuple[float, str, bool, float, bool, int, int]:
         """Raw P(entailment) from a 3-class NLI cross-encoder (softmax over
         contradiction / entailment / neutral).
 
@@ -218,12 +240,15 @@ class FaithfulnessChecker:
         every `neutral` claim at exactly 0.5 — the pass/fail threshold — which
         silently turned "model is uncertain" into a coin-flip verdict.
         """
+        t0 = time.perf_counter()
         p = nli_probs(evidence_text, claim_text)
+        wall = time.perf_counter() - t0
         raw = (
             f"[NLI {NLI_MODEL_NAME}] contradiction={p['contradiction']:.3f} "
             f"entailment={p['entailment']:.3f} neutral={p['neutral']:.3f}"
         )
-        return p["entailment"], raw, True
+        self._record("nli_judge", wall, 0, {"model": NLI_MODEL_NAME, "cached": False})
+        return p["entailment"], raw, True, wall, False, 0, 0
 
     # ponytail: 800 covers a reasoning model's hidden <think> budget + the JSON
     # answer; the retry triples it. Drop the base if the judge is not a
@@ -231,7 +256,7 @@ class FaithfulnessChecker:
     CHAT_JUDGE_MAX_TOKENS = 800
     CHAT_JUDGE_RETRY_MAX_TOKENS = 2400
 
-    def _judge_chat(self, evidence_text: str, claim_text: str) -> tuple[float, str, bool]:
+    def _judge_chat(self, evidence_text: str, claim_text: str) -> tuple[float, str, bool, float, bool, int, int]:
         """Entailment score from a chat model, routed through pre/llm/client.py
         (digest-pinned, disk-cached). Model family must differ from the RCA
         generator's — see DEFAULT_CHAT_JUDGE_DIGEST.
@@ -253,9 +278,11 @@ class FaithfulnessChecker:
                 seed=0,
             )
 
+        t0 = time.perf_counter()
         resp = _call(self.CHAT_JUDGE_MAX_TOKENS)
         if resp.truncated:
             resp = _call(self.CHAT_JUDGE_RETRY_MAX_TOKENS)
+        wall = time.perf_counter() - t0
 
         score, how = _parse_chat_score(resp.text)
         tag = f"parse={how}"
@@ -265,12 +292,17 @@ class FaithfulnessChecker:
             tag += f" TRUNCATED@{resp.tokens_used}tok"
         raw = f"[CHAT {resp.model_digest} {tag}] {resp.text.strip()}"
 
+        self._record("chat_judge", wall, resp.tokens_used, {
+            "model_digest": resp.model_digest, "cached": resp.cached,
+            "tokens_in": resp.tokens_in, "truncated": resp.truncated,
+        })
+
         if resp.truncated:
             # Retried and still cut off — do not trust the partial reply.
-            return 0.5, raw + "  <<TRUNCATED after retry -> invalid>>", False
+            return 0.5, raw + "  <<TRUNCATED after retry -> invalid>>", False, wall, resp.cached, resp.tokens_in, resp.tokens_used
         if score is None:
-            return 0.5, raw + "  <<UNPARSED -> invalid>>", False
-        return score, raw, True
+            return 0.5, raw + "  <<UNPARSED -> invalid>>", False, wall, resp.cached, resp.tokens_in, resp.tokens_used
+        return score, raw, True, wall, resp.cached, resp.tokens_in, resp.tokens_used
 
     def check_claim(self, claim: Claim) -> FaithfulnessScore:
         """Run full two-stage faithfulness check on a claim.
@@ -293,7 +325,9 @@ class FaithfulnessChecker:
             )
 
         # Stage 2: only if stage 1 passed.
-        stage2_score, judge_output, stage2_valid = self.stage2_check(claim)
+        stage2_score, judge_output, stage2_valid, wall_seconds, cached, tokens_in, tokens_out = (
+            self.stage2_check(claim)
+        )
         # For the chat judge this is "evidence supports the claim". For NLI it
         # is "P(strict textual entailment) >= 0.5" — a deliberately strict,
         # low-recall bar; per PROTOCOL.md NLI is a comparison point and its
@@ -311,6 +345,10 @@ class FaithfulnessChecker:
             judge_output=judge_output,
             overall_faithful=stage2_pass,
             stage2_valid=stage2_valid,
+            wall_seconds=wall_seconds,
+            cached=cached,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
         )
 
     def check_rca_result(self, rca: RCAResult) -> list[FaithfulnessScore]:

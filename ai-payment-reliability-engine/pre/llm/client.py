@@ -46,6 +46,7 @@ class LLMResponse:
     cached: bool
     tokens_used: int
     truncated: bool = False  # generation stopped at the token limit, not naturally
+    tokens_in: int = 0  # prompt/input tokens; 0 for cache entries written before this field existed
 
 
 class LLMClient:
@@ -169,6 +170,7 @@ class LLMClient:
                     cached=True,
                     tokens_used=data["tokens_used"],
                     truncated=data.get("truncated", False),
+                    tokens_in=data.get("tokens_in", 0),
                 )
             except Exception:
                 pass
@@ -182,6 +184,7 @@ class LLMClient:
             "model_digest": response.model_digest,
             "tokens_used": response.tokens_used,
             "truncated": response.truncated,
+            "tokens_in": response.tokens_in,
         }
         cache_file.write_text(json.dumps(data))
 
@@ -242,6 +245,7 @@ class LLMClient:
             # Ollama /api/chat field names (verified against a live response):
             # eval_count = generated tokens, prompt_eval_count = input tokens.
             tokens = data.get("eval_count", 0)
+            tokens_in = data.get("prompt_eval_count", 0)
 
             return LLMResponse(
                 text=text,
@@ -249,6 +253,7 @@ class LLMClient:
                 cached=False,
                 tokens_used=tokens,
                 truncated=data.get("done_reason") == "length",
+                tokens_in=tokens_in,
             )
         except Exception as e:
             raise RuntimeError(f"Ollama call failed: {e}")
@@ -290,6 +295,7 @@ class LLMClient:
             text = choice["message"]["content"]
             # OpenAI-compatible: usage.completion_tokens / usage.prompt_tokens.
             tokens = data["usage"]["completion_tokens"]
+            tokens_in = data["usage"].get("prompt_tokens", 0)
 
             return LLMResponse(
                 text=text,
@@ -297,6 +303,7 @@ class LLMClient:
                 cached=False,
                 tokens_used=tokens,
                 truncated=choice.get("finish_reason") == "length",
+                tokens_in=tokens_in,
             )
         except Exception as e:
             raise RuntimeError(f"vLLM call failed: {e}")

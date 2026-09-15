@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +42,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 from pre.agents.evidence import EvidenceRanker
+from pre.audit.ledger import StepOutcome
 from pre.agents.training.featurize import (
     ALERT_FEATURE_NAMES,
     FEATURE_NAMES,
@@ -199,6 +201,30 @@ def fit_calibrate(cols, df, lab, split_idx, taus):
         "test": evaluate(lr, scaler, isotonic, lr.classes_, X[te], lab[te], taus),
     }
     return bundle, ev
+
+
+def predict_one(bundle, x_row, *, ledger=None, case_id=None):
+    """Single-case triage inference -- the real call site a live system hits
+    once per triaged alert (evaluate() above stays batched/vectorized for
+    training-time metrics; it is not this call site). Instrumented for cost
+    profiling (Task 1.6): records step_name="triage_classification" with
+    wall_seconds when a ledger is given.
+    """
+    t0 = time.perf_counter()
+    xs = bundle["scaler"].transform(x_row.reshape(1, -1))
+    probs = bundle["lr"].predict_proba(xs)
+    pred = bundle["lr"].classes_[probs.argmax(axis=1)[0]]
+    conf = float(bundle["isotonic"].predict(probs.max(axis=1))[0])
+    wall = time.perf_counter() - t0
+    if ledger is not None:
+        detail = {"predicted_class": str(pred), "confidence": round(conf, 4)}
+        if case_id is not None:
+            detail["case_id"] = case_id
+        ledger.record(StepOutcome(
+            step_name="triage_classification", success=True,
+            wall_seconds=wall, tokens_used=0, detail=detail,
+        ))
+    return pred, conf
 
 
 def pick_tau(pr_rows, target_precision=0.95):

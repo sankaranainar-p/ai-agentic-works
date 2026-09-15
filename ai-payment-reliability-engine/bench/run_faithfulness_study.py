@@ -37,6 +37,7 @@ from bench.faithfulness import (
 )
 from pre.agents.evidence import EvidenceRanker
 from pre.agents.rca import Claim, RCAAgent, RCAResult
+from pre.audit.ledger import Ledger
 from pre.llm.client import LLMClient
 from pre.signals.alert_synth import synthesize_alert
 from pre.signals.rcaeval import RCAEvalAdapter
@@ -131,6 +132,7 @@ def main():
 
     client = LLMClient(cache_dir=args.llm_cache)
     cases = _load_cases(args.rcaeval_root, CASE_IDS[: args.limit])
+    ledger = Ledger(out_dir / "cost_ledger.jsonl")  # Task 1.6: per-call wall_seconds/tokens/cached
 
     records: list[dict] = []
     mis_synthesised: list[dict] = []
@@ -159,8 +161,13 @@ def main():
             tagged.append(("control", gc))
         tagged += [("adversarial", c) for c in _adversarial_claims(pack)]
 
-        nli_checker = FaithfulnessChecker(pack, JudgeBackend.NLI_CROSS_ENCODER)
-        chat_checker = FaithfulnessChecker(pack, JudgeBackend.CHAT_MODEL, chat_model_digest=DEFAULT_CHAT_JUDGE_DIGEST, llm_client=client)
+        nli_checker = FaithfulnessChecker(
+            pack, JudgeBackend.NLI_CROSS_ENCODER, ledger=ledger, case_id=case.case_id
+        )
+        chat_checker = FaithfulnessChecker(
+            pack, JudgeBackend.CHAT_MODEL, chat_model_digest=DEFAULT_CHAT_JUDGE_DIGEST,
+            llm_client=client, ledger=ledger, case_id=case.case_id,
+        )
 
         for kind, claim in tagged:
             nli = nli_checker.check_claim(claim)
@@ -187,6 +194,12 @@ def main():
                 "chat_raw": chat.judge_output,
                 "chat_model_digest": DEFAULT_CHAT_JUDGE_DIGEST,
                 "is_adversarial": kind == "adversarial",
+                "nli_wall_seconds": round(nli.wall_seconds, 4),
+                "nli_cached": nli.cached,
+                "chat_wall_seconds": round(chat.wall_seconds, 4),
+                "chat_cached": chat.cached,
+                "chat_tokens_in": chat.tokens_in,
+                "chat_tokens_out": chat.tokens_out,
             }
             records.append(rec)
             s1 = "Y" if nli.stage1_pass else "n"
@@ -283,6 +296,7 @@ def main():
     print("\n" + json.dumps(summary, indent=2))
     print(f"\nwrote {jsonl_path}")
     print(f"wrote {out_dir / 'manifest.json'}")
+    print(f"wrote {ledger.path}")
 
     nli_c = summary["nli_characterisation"]
     ok = (
