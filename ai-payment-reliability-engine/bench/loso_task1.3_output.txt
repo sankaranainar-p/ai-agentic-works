@@ -1,0 +1,159 @@
+==========================================================================================
+EXCLUSION STATEMENT (Task 1.3a precondition)
+==========================================================================================
+RE1-SS (Sock Shop) EXCLUDED from this LOSO run. Justification (either alone sufficient):
+  1. alert.service == 'cluster' on 125/125 RE1-SS cases (vs 13 real services on RE1-OB,
+     31 real services on RE2-TT) -- kpi_co_breaching_services has std=0.0 (always 1) as
+     a direct consequence: zero-variance feature, unconditionally uninformative for SS.
+  2. alert_metric_family is decoupled from true fault label on RE1-SS: 0/24 true-cpu
+     cases ever fire cpu_saturation (94.4% fire memory_saturation regardless of label).
+Two-fold LOSO below uses RE1-OB and RE2-TT only.
+==========================================================================================
+LEAKAGE CHECK: feature list actually used this fold
+==========================================================================================
+ALERT_FEATURE_NAMES (17): ['rule_memory_saturation', 'rule_cpu_saturation', 'rule_latency_degradation', 'rule_error_rate_spike', 'rule_disk_pressure', 'rule_socket_saturation', 'rule_generic_anomaly', 'rule_SILENT', 'sli_availability', 'sli_latency', 'sli_error_rate', 'sli_throughput', 'sli_consistency', 'kpi_breach_magnitude', 'kpi_slope_60s', 'kpi_co_breaching_services', 'alert_silent']
+PACK_FEATURE_NAMES  (29): ['ev_cpu_maxz', 'ev_memory_maxz', 'ev_disk_maxz', 'ev_socket_maxz', 'ev_latency_maxz', 'ev_network_maxz', 'ev_other_maxz', 'ev_cpu_rankrecip', 'ev_memory_rankrecip', 'ev_disk_rankrecip', 'ev_socket_rankrecip', 'ev_latency_rankrecip', 'ev_network_rankrecip', 'ev_other_rankrecip', 'ev_cpu_topk_count', 'ev_memory_topk_count', 'ev_disk_topk_count', 'ev_socket_topk_count', 'ev_latency_topk_count', 'ev_network_topk_count', 'ev_other_topk_count', 'ev_top1_cpu', 'ev_top1_memory', 'ev_top1_disk', 'ev_top1_socket', 'ev_top1_latency', 'ev_top1_network', 'ev_top1_other', 'ev_item_count']
+FEATURE_NAMES total: 46
+features matching TF-IDF naming: NONE
+features matching a per-service-one-hot naming pattern (service_*/svc_*): NONE
+(note: 'kpi_co_breaching_services' contains the substring 'service' but is a scalar COUNT of distinct services, not a one-hot of which service -- confirmed not a leakage vector, see full 46-name list above for manual verification)
+VERIFIED: no per-service one-hot, no TF-IDF feature in this fold's feature set.
+==========================================================================================
+LOAD DATA (RE1-OB, RE1-SS, RE2-TT cached features; RE1-SS filtered out below)
+==========================================================================================
+  [RE1-OB] 125 cases (cached)
+  [RE1-SS] 125 cases (cached)
+  [RE2-TT] 90 cases (cached)
+pooled cache rows: 340  sources: ['RE1-OB', 'RE1-SS', 'RE2-TT']
+RE1-OB n=125  RE2-TT n=90  (RE1-SS excluded from both folds)
+==========================================================================================
+STEP 2: LABEL-SPACE CHECK (before any macro-F1 is computed)
+==========================================================================================
+RE1-OB class set: ['cpu', 'delay', 'disk', 'loss', 'memory']
+RE2-TT class set: ['cpu', 'delay', 'disk', 'loss', 'memory', 'socket']
+LABEL SPACES DIFFER: classes only in RE2-TT (not RE1-OB): ['socket']  classes only in RE1-OB (not RE2-TT): none
+Consequence flagged explicitly per fold below (train missing a class the test set has,
+or train has a class the test set can never exercise).
+==========================================================================================
+FOLD A: train=RE2-TT (n=90) -> test=RE1-OB (n=125)
+==========================================================================================
+train class set: ['cpu', 'delay', 'disk', 'loss', 'memory', 'socket']
+test  class set: ['cpu', 'delay', 'disk', 'loss', 'memory']
+NOTE: train set contains class(es) never present in this test set: ['socket'] -- model *can* predict these as false positives on test even though they never occur as ground truth here.
+
+per-fold majority-class baseline (test set): predict 'cpu' always -> acc=0.2000  (25/125)
+
+model accuracy = 0.1760   macro_f1 = 0.0607
+accuracy - baseline = -0.0240
+
+prediction distribution on test set: {'cpu': 120, 'delay': 3, 'disk': 2}
+
+raw confusion table (rows=true, cols=predicted):
+pred    cpu  delay  disk
+true                    
+cpu      22      1     2
+delay    25      0     0
+disk     25      0     0
+loss     24      1     0
+memory   24      1     0
+==========================================================================================
+FOLD B: train=RE1-OB (n=125) -> test=RE2-TT (n=90)
+==========================================================================================
+train class set: ['cpu', 'delay', 'disk', 'loss', 'memory']
+test  class set: ['cpu', 'delay', 'disk', 'loss', 'memory', 'socket']
+WARNING: test set contains class(es) the model NEVER saw in training: ['socket'] -- these test cases are structurally unclassifiable correctly; recall=0 guaranteed for them.
+
+per-fold majority-class baseline (test set): predict 'cpu' always -> acc=0.1667  (15/90)
+
+model accuracy = 0.1667   macro_f1 = 0.0476
+accuracy - baseline = +0.0000
+
+prediction distribution on test set: {'disk': 90}
+
+raw confusion table (rows=true, cols=predicted):
+pred    disk
+true        
+cpu       15
+delay     15
+disk      15
+loss      15
+memory    15
+socket    15
+==========================================================================================
+SCALER-DISTRIBUTION SANITY CHECK (Fold A: scaler fit on RE2-TT train split, evaluated against RE1-OB's actual raw feature distribution)
+==========================================================================================
+Tests whether Fold A's collapse (acc 0.1760 < baseline 0.2000, 120/125 predicted 'cpu') is a
+scaling artifact (OB's raw values fall far outside what the TT-fit scaler expects) or a real
+transfer failure (values are in-range but the decision boundary still doesn't generalize).
+
+kpi_co_breaching_services specifically (flagged in Task 1.3a as fold-dependent-scale):
+                  feature  TT_fit_mean  TT_fit_scale  OB_raw_min  OB_raw_mean  OB_raw_max  OB_mean_in_TT_stds
+kpi_co_breaching_services      68.0278        0.1643     13.0000      13.0080     14.0000           -334.8014
+
+All 46 features, sorted by |OB_mean_in_TT_stds| descending (most out-of-distribution first):
+                  feature  TT_fit_mean  TT_fit_scale  OB_raw_min  OB_raw_mean   OB_raw_max  OB_mean_in_TT_stds
+kpi_co_breaching_services      68.0278        0.1643     13.0000      13.0080      14.0000           -334.8014
+            kpi_slope_60s     146.0203      527.2336 -69905.0667   32186.3666 4090470.4000             60.7707
+            ev_item_count      40.0000        1.0000      0.0000      30.0800      40.0000             -9.9200
+     ev_memory_topk_count       0.1667        0.3727      0.0000       1.0800       5.0000              2.4507
+         ev_cpu_rankrecip       0.0810        0.1456      0.0000       0.2636       1.0000              1.2540
+              ev_top1_cpu       0.0139        0.1170      0.0000       0.1440       1.0000              1.1118
+           ev_socket_maxz       2.1401        1.9376      0.0000       0.0000       0.0000             -1.1045
+      rule_cpu_saturation       0.7639        0.4247      0.0000       0.3520       1.0000             -0.9699
+           ev_memory_maxz       1.1795        2.1182      0.0000       2.9133       8.0477              0.8185
+      ev_other_topk_count       0.6667        1.2693      0.0000       1.6480       6.0000              0.7731
+      ev_socket_rankrecip       0.0607        0.0854      0.0000       0.0000       0.0000             -0.7112
+   rule_memory_saturation       0.2361        0.4247      0.0000       0.5120       1.0000              0.6496
+             ev_disk_maxz       1.7060        3.1677      0.0000       0.0000       0.0000             -0.5386
+      ev_memory_rankrecip       0.0896        0.2539      0.0000       0.2191       1.0000              0.5100
+        ev_disk_rankrecip       0.1176        0.2722      0.0000       0.0000       0.0000             -0.4319
+            ev_other_maxz       4.2503        7.3601      0.0000       7.3587      25.0334              0.4223
+       ev_other_rankrecip       0.2215        0.4011      0.0000       0.3847       1.0000              0.4068
+       ev_disk_topk_count       0.6250        1.8061      0.0000       0.0000       0.0000             -0.3460
+     ev_socket_topk_count       0.4861        1.4337      0.0000       0.0000       0.0000             -0.3391
+              ev_cpu_maxz       2.3548        2.1106      0.0000       2.9859       7.6032              0.2990
+             ev_top1_disk       0.0694        0.2542      0.0000       0.0000       0.0000             -0.2732
+     kpi_breach_magnitude       5.8440        3.8856      3.0269       6.5855     100.0000              0.1908
+        ev_cpu_topk_count       0.5139        1.1303      0.0000       0.7040       5.0000              0.1682
+            ev_top1_other       0.5972        0.4905      0.0000       0.5200       1.0000             -0.1574
+    ev_latency_topk_count       3.6528        3.5006      0.0000       4.0880      10.0000              0.1243
+ rule_latency_degradation       0.0000        1.0000      0.0000       0.0800       1.0000              0.0800
+         sli_availability       1.0000        1.0000      0.0000       0.9200       1.0000             -0.0800
+     ev_latency_rankrecip       0.3830        0.3982      0.0000       0.4146       1.0000              0.0795
+          ev_latency_maxz       3.8305        3.2421      0.0000       4.0817       9.7144              0.0775
+     rule_generic_anomaly       0.0000        1.0000      0.0000       0.0560       1.0000              0.0560
+           ev_top1_memory       0.0694        0.2542      0.0000       0.0800       1.0000              0.0415
+          ev_top1_latency       0.2500        0.4330      0.0000       0.2560       1.0000              0.0139
+    ev_network_topk_count       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+           ev_top1_socket       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+    rule_error_rate_spike       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+          ev_top1_network       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+          sli_consistency       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+       rule_disk_pressure       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+   rule_socket_saturation       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+              rule_SILENT       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+          ev_network_maxz       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+              sli_latency       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+             alert_silent       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+           sli_error_rate       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+           sli_throughput       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+     ev_network_rankrecip       0.0000        1.0000      0.0000       0.0000       0.0000              0.0000
+
+features where OB's mean sits >3 TT-fit-standard-deviations from the TT-fit center: 3/46
+features where OB's mean sits >10 TT-fit-standard-deviations from the TT-fit center: 2/46
+==========================================================================================
+SUMMARY: LOSO vs IN-DOMAIN (Task 1.1/1.2) -- DIFFERENT QUESTIONS, NOT DIRECTLY COMPARABLE NUMBERS
+==========================================================================================
+Fold A: acc=0.1760  macro_f1=0.0607  baseline_acc=0.2000  n_test=125
+Fold B: acc=0.1667  macro_f1=0.0476  baseline_acc=0.1667  n_test=90
+
+In-domain multi-system reference points (from prior tasks, NOT re-run here):
+  Task 1.1 combined-features multi-system model: test acc reported in docs/a7_multisystem_training_report.md
+  Task 1.2 nested-CV OOF (pooled dev, in-domain): precision=0.8684 recall=0.1213 @ tau*=0.7418 (threshold-selection honesty, not a same-metric comparison to LOSO accuracy/macro-F1 above)
+LOSO answers cross-system transfer (train on one deployed system's fault signatures, test on a
+system the model never saw); nested CV in Task 1.2 answers in-domain threshold honesty (same
+systems in train and test, pooled). These are different questions on different metrics --
+do not read one as validating or contradicting the other.
+==========================================================================================
+DONE
+==========================================================================================
