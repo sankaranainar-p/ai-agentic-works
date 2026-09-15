@@ -9,7 +9,7 @@ the LLM is caught at validation time rather than silently missing data.
 from __future__ import annotations
 
 import uuid
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -145,3 +145,20 @@ class AnalyzeResponse(BaseModel):
         default="none",
         description='Which LLM provider fired: "ollama", "anthropic", or "none" (fallback).',
     )
+    status: Literal["completed", "deferred_to_human"] = Field(
+        default="completed",
+        description='Analysis completion status: "completed" or "deferred_to_human" (abstain).',
+    )
+    routing_action: Literal["symbolic", "neural", "abstain"] = Field(
+        default="neural",
+        description='Action taken by the arbitration router: "symbolic", "neural", or "abstain".',
+    )
+    estimated_risk: Optional[float] = Field(
+        default=None,
+        description="Expected conditional risk computed by the cost-sensitive router.",
+    )
+    prov_receipt: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="W3C PROV-DM compliant provenance audit receipt dictionary.",
+    )
+
