@@ -99,11 +99,26 @@ class ComplianceFinding(BaseModel):
         description="Regulation article URLs or official guidance links.",
     )
     confidence: float = Field(
-        default=1.0,
-        description="Confidence score 0–1. Set < 1 by the fallback path when LLM is unavailable.",
+        default=0.50,
+        description="Confidence score 0–1. Defaults to neutral baseline 0.50 when missing.",
         ge=0.0,
         le=1.0,
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def validate_confidence(cls, v: Any) -> float:
+        if v is None:
+            return 0.50
+        try:
+            val = float(v)
+        except (ValueError, TypeError):
+            return 0.50
+        if val < 0.0:
+            return 0.0
+        if val > 1.0:
+            return 1.0
+        return val
 
 
 # ---------------------------------------------------------------------------

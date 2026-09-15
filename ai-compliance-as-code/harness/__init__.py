@@ -40,10 +40,13 @@ def __getattr__(name: str):
 
 
 from harness.metrics import (
+    CalibrationBin,
+    CalibrationReport,
     MultiLabelMetrics,
     Task1Metrics,
     compute_accuracy_at_k,
     compute_accuracy_at_k_range,
+    compute_calibration_analysis,
     compute_multilabel_metrics,
     compute_task1_metrics,
 )
@@ -53,6 +56,8 @@ __all__ = [
     "ASTResolver",
     "ArbitrationBenchmarkMetrics",
     "BenchmarkRecord",
+    "CalibrationBin",
+    "CalibrationReport",
     "ComplementarityEngine",
     "ComplementarityMetrics",
     "ContingencyCellCounts",
@@ -66,6 +71,7 @@ __all__ = [
     "benjamini_hochberg",
     "compute_accuracy_at_k",
     "compute_accuracy_at_k_range",
+    "compute_calibration_analysis",
     "compute_contingency_cells",
     "compute_multilabel_metrics",
     "compute_task1_metrics",

@@ -7,8 +7,11 @@ Task 2: Snippet-level multi-label classification scored by exact-match accuracy 
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import Collection, Dict, Iterable, List, Optional, Sequence, Set, Union
+from typing import Any, Collection, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
+
+import numpy as np
 
 
 # ---------------------------------------------------------------------------
@@ -250,4 +253,249 @@ def compute_multilabel_metrics(
         classes=global_classes,
         in_scope_classes=in_scope_classes,
         per_class=per_class_dict,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Section 3: Confidence Calibration & Reliability Analysis (Murphy 1973)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CalibrationBin:
+    """Evaluation statistics for a single confidence bin."""
+
+    bin_idx: int
+    count: int
+    prop: float
+    mean_confidence: float
+    empirical_accuracy: float
+    calibration_error: float
+    margin_of_error: float
+    confidence_lower: float = 0.0
+    confidence_upper: float = 1.0
+    wald_moe: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "bin": self.bin_idx + 1,
+            "bin_idx": self.bin_idx,
+            "count": self.count,
+            "prop": round(self.prop, 4),
+            "mean_confidence": round(self.mean_confidence, 4),
+            "empirical_accuracy": round(self.empirical_accuracy, 4),
+            "calibration_error": round(self.calibration_error, 4),
+            "margin_of_error": round(self.margin_of_error, 4),
+            "wald_moe": round(self.wald_moe, 4),
+            "confidence_lower": round(self.confidence_lower, 4),
+            "confidence_upper": round(self.confidence_upper, 4),
+        }
+
+
+@dataclass
+class CalibrationReport:
+    """Comprehensive confidence calibration and Murphy (1973) decomposition results."""
+
+    strategy: str
+    num_bins: int
+    num_samples: int
+    ece: float
+    mce: float
+    brier_score: float
+    reliability: float
+    resolution: float
+    uncertainty: float
+    base_rate: float
+    brier_score_raw: float = 0.0
+    bins: List[CalibrationBin] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "strategy": self.strategy,
+            "num_bins": self.num_bins,
+            "num_samples": self.num_samples,
+            "ece": round(self.ece, 6),
+            "mce": round(self.mce, 6),
+            "brier_score": round(self.brier_score, 6),
+            "brier_score_raw": round(self.brier_score_raw, 6),
+            "reliability": round(self.reliability, 6),
+            "resolution": round(self.resolution, 6),
+            "uncertainty": round(self.uncertainty, 6),
+            "base_rate": round(self.base_rate, 6),
+            "murphy_identity_error": round(
+                abs(self.brier_score - (self.reliability - self.resolution + self.uncertainty)), 12
+            ),
+            "bins": [b.to_dict() for b in self.bins],
+        }
+
+    def format_ascii_table(self) -> str:
+        """Format an ASCII reliability table displaying Bin, Count, Mean Conf, Empirical Acc, and ±95% MoE."""
+        header = "+-----+-------+-----------+---------------+----------+"
+        title  = "| Bin | Count | Mean Conf | Empirical Acc | ±95% MoE |"
+        lines = [header, title, header]
+        for b in self.bins:
+            b_num = b.bin_idx + 1
+            moe_str = f"±{b.margin_of_error:.4f}"
+            lines.append(
+                f"| {b_num:3d} | {b.count:5d} | {b.mean_confidence:9.4f} | {b.empirical_accuracy:13.4f} | {moe_str:>8s} |"
+            )
+        lines.append(header)
+        return "\n".join(lines)
+
+
+def compute_calibration_analysis(
+    confidences: Sequence[float],
+    labels: Sequence[Union[int, bool, float]],
+    num_bins: int = 5,
+    strategy: str = "quantile",
+) -> CalibrationReport:
+    """Compute calibration metrics, ECE, MCE, Wilson margins of error, and Murphy decomposition.
+
+    Supports:
+      - strategy='quantile': Equal-frequency binning with ordinal rank-based tie handling
+      - strategy='uniform': Equal-width binning across [0.0, 1.0]
+
+    Murphy's Decomposition (1973):
+      BS = REL - RES + UNC
+      where:
+        REL = sum_{m=1}^M (n_m / N) * (bar{p}_m - bar{y}_m)^2
+        RES = sum_{m=1}^M (n_m / N) * (bar{y}_m - bar{y})^2
+        UNC = bar{y} * (1 - bar{y})
+
+    Args:
+        confidences: Sequence of confidence values in [0.0, 1.0].
+        labels: Sequence of binary ground truth outcomes in {0, 1}.
+        num_bins: Number of calibration bins (default: 5).
+        strategy: 'quantile' (default) or 'uniform'.
+
+    Returns:
+        CalibrationReport instance.
+
+    Raises:
+        ValueError: If inputs are empty, length mismatch, or num_bins < 1.
+    """
+    if len(confidences) == 0 or len(labels) == 0:
+        raise ValueError("confidences and labels must not be empty")
+    if len(confidences) != len(labels):
+        raise ValueError(
+            f"confidences length ({len(confidences)}) must match labels length ({len(labels)})"
+        )
+    if num_bins < 1:
+        raise ValueError(f"num_bins must be a positive integer >= 1, got {num_bins}")
+    if strategy not in ("quantile", "uniform"):
+        raise ValueError(
+            f"strategy must be 'quantile' or 'uniform', got {strategy!r}"
+        )
+
+    confs = np.asarray(confidences, dtype=float)
+    labs = np.asarray(labels, dtype=float)
+    N = len(confs)
+
+    # Sanitize bounds
+    confs = np.clip(confs, 0.0, 1.0)
+    labs = (labs > 0.5).astype(float)
+
+    # Base rate & uncertainty
+    y_bar = float(np.mean(labs))
+    unc = float(y_bar * (1.0 - y_bar))
+
+    # Bin assignment
+    bin_bounds: List[Tuple[float, float]] = []
+
+    if strategy == "uniform":
+        bin_width = 1.0 / num_bins
+        bin_idx = np.minimum((confs * num_bins).astype(int), num_bins - 1)
+        bin_idx = np.maximum(bin_idx, 0)
+        for m in range(num_bins):
+            bin_bounds.append((m * bin_width, (m + 1) * bin_width))
+
+    elif strategy == "quantile":
+        # Handle edge case where all confidences are identical
+        if np.isclose(float(np.max(confs)), float(np.min(confs))):
+            bin_idx = np.zeros(N, dtype=int)
+            val = float(confs[0])
+            for m in range(num_bins):
+                bin_bounds.append((val, val))
+        else:
+            order = np.argsort(confs, kind="stable")
+            bin_idx = np.empty(N, dtype=int)
+            bin_idx[order] = np.clip((np.arange(N) * num_bins) // N, 0, num_bins - 1)
+            for m in range(num_bins):
+                m_mask = (bin_idx == m)
+                if np.any(m_mask):
+                    bin_bounds.append((float(np.min(confs[m_mask])), float(np.max(confs[m_mask]))))
+                else:
+                    bin_bounds.append((0.0, 1.0))
+
+    # Compute per-bin metrics
+    bins: List[CalibrationBin] = []
+    rel = 0.0
+    res = 0.0
+    ece = 0.0
+    abs_errors: List[float] = []
+    z_95 = 1.959963984540054
+
+    for m in range(num_bins):
+        mask = (bin_idx == m)
+        nm = int(np.sum(mask))
+        prop = nm / N
+        b_lower, b_upper = bin_bounds[m]
+
+        if nm > 0:
+            pm = float(np.mean(confs[mask]))
+            ym = float(np.mean(labs[mask]))
+            cal_err = abs(pm - ym)
+            abs_errors.append(cal_err)
+
+            # Murphy terms
+            rel += prop * ((pm - ym) ** 2)
+            res += prop * ((ym - y_bar) ** 2)
+            ece += prop * cal_err
+
+            # Wilson 95% margin of error
+            denom = 1.0 + (z_95 * z_95) / nm
+            term = (ym * (1.0 - ym)) / nm + (z_95 * z_95) / (4.0 * nm * nm)
+            wilson_moe = float((z_95 / denom) * math.sqrt(term))
+
+            # Wald margin of error
+            wald_moe = float(z_95 * math.sqrt(max(ym * (1.0 - ym), 0.0) / nm))
+        else:
+            pm = 0.0
+            ym = 0.0
+            cal_err = 0.0
+            wilson_moe = 0.0
+            wald_moe = 0.0
+
+        bins.append(
+            CalibrationBin(
+                bin_idx=m,
+                count=nm,
+                prop=prop,
+                mean_confidence=pm,
+                empirical_accuracy=ym,
+                calibration_error=cal_err,
+                margin_of_error=wilson_moe,
+                confidence_lower=b_lower,
+                confidence_upper=b_upper,
+                wald_moe=wald_moe,
+            )
+        )
+
+    mce = max(abs_errors) if abs_errors else 0.0
+    # Murphy decomposition identity: BS = REL - RES + UNC
+    brier_score = float(rel - res + unc)
+    raw_brier = float(np.mean((confs - labs) ** 2))
+
+    return CalibrationReport(
+        strategy=strategy,
+        num_bins=num_bins,
+        num_samples=N,
+        ece=float(ece),
+        mce=float(mce),
+        brier_score=brier_score,
+        reliability=float(rel),
+        resolution=float(res),
+        uncertainty=float(unc),
+        base_rate=float(y_bar),
+        brier_score_raw=raw_brier,
+        bins=bins,
     )

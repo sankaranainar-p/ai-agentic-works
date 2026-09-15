@@ -506,6 +506,7 @@ def _parse_findings(
             continue
         # Inject file_path if the model omitted it
         item.setdefault("file", file_path)
+        item.setdefault("confidence", 1.0)
         try:
             findings.append(ComplianceFinding(**item))
         except (ValidationError, TypeError):
