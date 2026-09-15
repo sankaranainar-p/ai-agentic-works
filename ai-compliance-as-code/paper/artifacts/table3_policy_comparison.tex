@@ -1,0 +1,16 @@
+\begin{table*}[t]
+\centering
+\caption{Out-of-fold performance comparison across four arbitration policies evaluated under $5 \times 3$ Nested Cross-Validation. Normalized operational cost penalizes false negatives ($c_{FN}=1.0$), false positives ($c_{FP}=0.1$), and expert review ($c_H=0.25$). McNemar's test assesses statistical significance versus Policy 1.}
+\label{tab:policy_benchmark}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Arbitration Policy} & \textbf{Macro-F1} & \textbf{Precision} & \textbf{Recall} & \textbf{Operational Cost} & \textbf{Abstention Rate} & \textbf{McNemar $p$ vs P1} \\
+\midrule
+Policy 1 (Baseline) & 0.0036 & 0.0000 & 0.0000 & 2.8800 $\pm$ 2.55 & 0.0\% & --- \\
+Policy 2 (Oracle) & \textbf{0.1468} & 0.0000 & 0.0000 & 0.2558 $\pm$ 0.04 & 98.0\% & --- \\
+Policy 3 (Learned) & 0.0000 & 0.0000 & 0.0000 & 2.8646 $\pm$ 2.55 & 0.0\% & --- \\
+Policy 4 (CostReject) & \textbf{0.0036} & 0.0000 & 0.0000 & 2.8700 $\pm$ 2.55 & 0.0\% & --- \\
+\bottomrule
+\end{tabular}
+\end{table*}

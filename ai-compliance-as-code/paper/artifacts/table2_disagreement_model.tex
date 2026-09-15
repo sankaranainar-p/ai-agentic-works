@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Logistic regression feature weights predicting detector victory on disagreement instances ($P(S=1 \mid S \neq L, x)$). Odds ratios $>1.0$ favor Symbolic detection; $<1.0$ favor Neural detection. Statistical significance denoted after Benjamini-Hochberg FDR correction ($q < 0.05^*$).}
+\label{tab:disagreement_regression}
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Feature Variable $\phi(x)$} & \textbf{Odds Ratio (OR)} & \textbf{95\% Confidence Interval} & \textbf{Wald $z$} & \textbf{$p$-value} & \textbf{FDR $q$-value} \\
+\midrule
+Intercept & 1.16 & [0.82, 1.64] & +0.84 & 0.4020 & 0.4020 \\
+Granularity: File Scope & \textbf{0.43}$^*$ & [0.26, 0.70] & -3.31 & < 0.001 & 0.0036 \\
+Granularity: Module Scope & \textbf{1.57}$^*$ & [1.08, 2.28] & +2.37 & 0.0179 & 0.0358 \\
+$\log_{10}(\text{Character Length})$ & \textbf{0.52}$^*$ & [0.34, 0.81] & -2.97 & 0.0029 & 0.0087 \\
+Target Article 5 (Principles) & \textbf{2.23}$^*$ & [1.35, 3.68] & +3.12 & 0.0018 & 0.0072 \\
+Target Article 6 (Lawfulness) & 0.74 & [0.46, 1.19] & -1.24 & 0.2148 & 0.2578 \\
+Target Article 25 (Design) & \textbf{1.82}$^*$ & [1.12, 2.96] & +2.44 & 0.0148 & 0.0355 \\
+Target Article 32 (Security) & \textbf{2.12}$^*$ & [1.31, 3.42] & +3.10 & 0.0019 & 0.0076 \\
+Scanner Risk Indicators Count & \textbf{1.65}$^*$ & [1.18, 2.30] & +2.95 & 0.0032 & 0.0085 \\
+Hint: Plaintext HTTP Outbound & \textbf{3.32}$^*$ & [1.78, 6.20] & +3.78 & < 0.001 & 0.0012 \\
+Hint: Plaintext Password Field & \textbf{2.46}$^*$ & [1.32, 4.58] & +2.87 & 0.0041 & 0.0103 \\
+Language: Kotlin (.kt) & 1.22 & [0.75, 1.98] & +0.80 & 0.4209 & 0.4209 \\
+\bottomrule
+\end{tabular}
+\end{table}

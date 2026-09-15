@@ -1,0 +1,25 @@
+\begin{table*}[t]
+\centering
+\caption{Four-cell contingency breakdown and detector disagreement across benchmark partitions (GDPR-Bench-Android, $N=887$). Cell 1: Both correct; Cell 2: Both incorrect; Cell 3: Static-only correct; Cell 4: LLM-only correct.}
+\label{tab:complementarity_matrix}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Partition Scope} & \textbf{Total ($N$)} & \textbf{Both Correct} & \textbf{Both Incorrect} & \textbf{Static Only} & \textbf{LLM Only} & \textbf{Disagreement Rate} \\
+\midrule
+\textbf{Global Benchmark} & 50 & 0 (0.0\%) & 49 (98.0\%) & 1 (2.0\%) & 0 (0.0\%) & 2.0\% \\
+\midrule
+\multicolumn{7}{l}{\textit{\textbf{Partitioned by Granularity Scope}}} \\
+  File Scope & 0 & 0 (0.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+  Module Scope & 15 & 0 (0.0\%) & 15 (100.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+  Line Scope & 35 & 0 (0.0\%) & 34 (97.1\%) & 1 (2.9\%) & 0 (0.0\%) & 2.9\% \\
+\midrule
+\multicolumn{7}{l}{\textit{\textbf{Partitioned by Key GDPR Articles}}} \\
+  Article 5 (Data Minimisation) & 17 & 0 (0.0\%) & 16 (94.1\%) & 1 (5.9\%) & 0 (0.0\%) & 5.9\% \\
+  Article 6 (Lawfulness of Processing) & 13 & 0 (0.0\%) & 13 (100.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+  Article 25 (Data Protection by Design) & 5 & 0 (0.0\%) & 5 (100.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+  Article 32 (Security of Processing) & 4 & 0 (0.0\%) & 4 (100.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+  Other GDPR Articles & 11 & 0 (0.0\%) & 11 (100.0\%) & 0 (0.0\%) & 0 (0.0\%) & 0.0\% \\
+\bottomrule
+\end{tabular}
+\end{table*}

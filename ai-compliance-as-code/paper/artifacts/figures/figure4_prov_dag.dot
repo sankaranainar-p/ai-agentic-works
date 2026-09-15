@@ -1,0 +1,46 @@
+digraph PROV_Receipt {
+    rankdir=LR;
+    node [fontsize=10, fontname="Helvetica", style="filled,rounded"];
+    edge [fontsize=9, fontname="Helvetica", color="#555555"];
+
+    // Entities (Yellow)
+    node [shape=box, fillcolor="#fff2cc", color="#d6b656"];
+    InputSnippet [label="Entity:\nInputSnippet\n(SHA-256 Digest)"];
+    RulePack [label="Entity:\nRulePack_GDPR\n(Articles 5..49)"];
+    StaticFindings [label="Entity:\nStaticFindings\n(Rule Violations)"];
+    LLMFindings [label="Entity:\nLLMFindings\n(Verbalized Conf)"];
+    FinalFindings [label="Entity:\nArbitratedFindings\n(Selected Actions)"];
+    ProvReceipt [label="Entity:\nAuditReceipt\n(W3C PROV-DM)"];
+
+    // Activities (Blue)
+    node [shape=ellipse, fillcolor="#dae8fc", color="#6c8ebf"];
+    StaticScan [label="Activity:\nStaticScanActivity"];
+    LLMInference [label="Activity:\nLLMInferenceActivity"];
+    Arbitration [label="Activity:\nCostArbitrationActivity\n(Tri-Choice P4)"];
+
+    // Agents (Green)
+    node [shape=hexagon, fillcolor="#d5e8d4", color="#82b366"];
+    StaticAgent [label="Agent:\nStaticDetectorAgent"];
+    LLMAgent [label="Agent:\nLLMDetectorAgent"];
+    ArbitratorAgent [label="Agent:\nArbitratorAgent"];
+
+    // Provenance Relations
+    StaticScan -> InputSnippet [label="used"];
+    StaticScan -> RulePack [label="used"];
+    StaticFindings -> StaticScan [label="wasGeneratedBy"];
+    StaticScan -> StaticAgent [label="wasAssociatedWith"];
+
+    LLMInference -> InputSnippet [label="used"];
+    LLMInference -> RulePack [label="used"];
+    LLMFindings -> LLMInference [label="wasGeneratedBy"];
+    LLMInference -> LLMAgent [label="wasAssociatedWith"];
+
+    Arbitration -> StaticFindings [label="used"];
+    Arbitration -> LLMFindings [label="used"];
+    FinalFindings -> Arbitration [label="wasGeneratedBy"];
+    FinalFindings -> StaticFindings [label="wasDerivedFrom"];
+    FinalFindings -> LLMFindings [label="wasDerivedFrom"];
+    Arbitration -> ArbitratorAgent [label="wasAssociatedWith"];
+
+    ProvReceipt -> FinalFindings [label="wasDerivedFrom"];
+}
