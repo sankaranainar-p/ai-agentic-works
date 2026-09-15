@@ -38,6 +38,28 @@ edit here, and the study restarts under the new version.
   **Realized ω at N=67:** solving ω²=z²·Q/N gives ω=0.1710 (π=0.5) to
   0.1715 (π=0.537, this project's empirical rate) — about 14% wider than
   the ω≤0.15 target, not a large cost either way (b) or (c) is chosen.
+  **Realized ω at N=74 (added 2026-09-15, option (a) partially exercised):**
+  Task 1.4 expanded RE2-TT production claims to 34 (`results/faithfulness_task1.4/20260915T160745Z/`,
+  not yet promoted to `docs/`), which combined with RE1-OB's original 40
+  production claims gives **N=74**, still short of 88 by 14 (see
+  Task 1.4 follow-up discussion). Same formula, same κ0/z:
+  ω=0.1627 (π=0.5) to 0.1633 (π=0.5405 — this project's own combined
+  production-only empirical faithful rate, 40/74 faithful across both
+  datasets: RE1-OB 27/40=0.6750, RE2-TT 13/34=0.3824) — about 8.5–8.9%
+  wider than the ω≤0.15 target, roughly **halving** the N=67 gap (14%→9%)
+  without reaching it. **N=67 and N=74 are not directly comparable
+  populations:** N=67 is RE1-OB's *entire* judge_scores.jsonl (production
+  + control + adversarial, 40+9+18); N=74 is *production claims only*,
+  pooled across two datasets with materially different faithful rates
+  (0.675 vs 0.382 — RE1-OB and RE2-TT are not interchangeable here, see
+  the separate-vs-merged figures question raised in the Task 1.4
+  follow-up, still undecided). If the human-rating pool should also
+  include RE2-TT's control/adversarial claims (80 more: 20 control + 60
+  adversarial, RE2-TT total = 34+20+60 = 114), the all-populations
+  combined N would be 67+114=181, comfortably clearing 88 — but rating
+  synthetic control/adversarial claims alongside real production claims
+  changes what the kappa measures and is a separate decision from the
+  N=67 vs N=74 arithmetic above.
   **Recommendation (not a decision — pending co-author sign-off):**
   option (c). Rate all 67 now, pre-register ω≤0.15 and report the
   realized ω≈0.17 plainly alongside it — no post-hoc adjustment, no
