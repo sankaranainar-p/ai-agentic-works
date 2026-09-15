@@ -164,13 +164,17 @@ class IdentifierAnonymizer:
         return self.fn_map[raw_name]
 
     def anonymize_class(self, raw_name: str) -> str:
-        """Map raw class name to cls_0, cls_1, etc."""
+        """Map raw class name to class_0, class_1, etc."""
         if not raw_name or raw_name in _SAFE_LANGUAGE_KEYWORDS:
             return raw_name
         if raw_name not in self.cls_map:
-            self.cls_map[raw_name] = f"cls_{self.cls_counter}"
+            self.cls_map[raw_name] = f"class_{self.cls_counter}"
             self.cls_counter += 1
         return self.cls_map[raw_name]
+
+    def anonymize_method(self, raw_name: str) -> str:
+        """Alias for anonymize_function for methods."""
+        return self.anonymize_function(raw_name)
 
     def map_sink(self, sink_text: str) -> str:
         """Map arbitrary sink strings to standard abstract ontology sinks."""
@@ -183,6 +187,8 @@ class IdentifierAnonymizer:
             return "sink_storage"
         if "log" in s or "print" in s or "console" in s:
             return "sink_log"
+        if "third_party" in s or "facebook" in s or "google" in s or "admob" in s:
+            return "sink_third_party"
         return "sink_external"
 
     def map_source(self, category: str, name: str) -> str:
@@ -190,7 +196,7 @@ class IdentifierAnonymizer:
         cat = category.lower()
         nm = name.lower()
         if "email" in nm:
-            return "source_pii_email"
+            return "source_pii_contact"
         if "password" in nm or "auth" in cat or "token" in nm or "key" in nm:
             return "source_auth_credential"
         if "phone" in nm or "tel" in nm:
@@ -214,6 +220,19 @@ class IdentifierAnonymizer:
             # Search for exact token occurrences
             pattern = rf"\b{re.escape(token.lower())}\b"
             if re.search(pattern, record_json):
+                leaked.append(token)
+        return (len(leaked) == 0, leaked)
+
+    @classmethod
+    def audit_evidence_graph_clean(cls, evidence_graph: Dict[str, Any], forbidden_tokens: Sequence[str]) -> Tuple[bool, List[str]]:
+        """Verify that no raw identifier names appear anywhere in evidence_graph."""
+        graph_json = json.dumps(evidence_graph).lower()
+        leaked: List[str] = []
+        for token in forbidden_tokens:
+            if not token or len(token) < 3 or token in _SAFE_LANGUAGE_KEYWORDS:
+                continue
+            pattern = rf"\b{re.escape(token.lower())}\b"
+            if re.search(pattern, graph_json):
                 leaked.append(token)
         return (len(leaked) == 0, leaked)
 
@@ -243,14 +262,20 @@ def build_audit_record(
     # Regex for identifiers: variable declarations, function names, classes
     raw_identifiers: Set[str] = set()
 
+    # Find class names: e.g. class PaymentDataSyncHandler
+    for m in re.finditer(r"\bclass\s+([a-zA-Z_][a-zA-Z0-9_]*)", code):
+        cls_name = m.group(1)
+        if cls_name not in _SAFE_LANGUAGE_KEYWORDS:
+            raw_identifiers.add(cls_name)
+
     # Find function names: e.g. void sendUserData(
     for m in re.finditer(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", code):
         fn_name = m.group(1)
         if fn_name not in _SAFE_LANGUAGE_KEYWORDS:
             raw_identifiers.add(fn_name)
 
-    # Find variable names: e.g. String email, String password
-    for m in re.finditer(r"\b(?:String|int|boolean|HttpURLConnection|var|val)\s+([a-zA-Z_][a-zA-Z0-9_]*)", code):
+    # Find variable names: e.g. String email, String password, HttpURLConnection conn, URL url
+    for m in re.finditer(r"\b(?:String|int|boolean|HttpURLConnection|URL|var|val)\s+([a-zA-Z_][a-zA-Z0-9_]*)", code):
         v_name = m.group(1)
         if v_name not in _SAFE_LANGUAGE_KEYWORDS:
             raw_identifiers.add(v_name)
@@ -318,8 +343,8 @@ def build_audit_record(
     # Map variables and functions to anonymized IDs
     anon_sources: List[str] = []
     if has_pii:
-        src = "source_pii_email"
-        v_anon = anonymizer.anonymize_variable("email_field")
+        src = "source_pii_contact"
+        v_anon = anonymizer.anonymize_variable("param_contact")
         nodes.append({"id": src, "kind": "source", "category": "pii"})
         nodes.append({"id": v_anon, "kind": "variable", "category": "pii"})
         triples.append({"subject": v_anon, "predicate": "assigned_from", "object": src})
@@ -327,7 +352,7 @@ def build_audit_record(
 
     if has_password:
         src = "source_auth_credential"
-        v_anon = anonymizer.anonymize_variable("credential_field")
+        v_anon = anonymizer.anonymize_variable("param_credential")
         nodes.append({"id": src, "kind": "source", "category": "auth"})
         nodes.append({"id": v_anon, "kind": "variable", "category": "auth"})
         triples.append({"subject": v_anon, "predicate": "assigned_from", "object": src})
@@ -340,15 +365,36 @@ def build_audit_record(
         nodes.append({"id": fn_anon, "kind": "function", "category": "network"})
         triples.append({"subject": fn_anon, "predicate": "dispatches_to", "object": sink})
 
-        for s_var in anon_sources:
-            triples.append({"subject": fn_anon, "predicate": "transmits", "object": s_var})
-            data_flow_paths.append([s_var, fn_anon, sink])
+        if anon_sources:
+            for s_var in anon_sources:
+                triples.append({"subject": fn_anon, "predicate": "transmits", "object": s_var})
+                data_flow_paths.append([s_var, fn_anon, sink])
+        else:
+            v_payload = anonymizer.anonymize_variable("net_payload")
+            nodes.append({"id": v_payload, "kind": "variable", "category": "network"})
+            triples.append({"subject": fn_anon, "predicate": "transmits", "object": v_payload})
+            data_flow_paths.append([v_payload, fn_anon, sink])
 
     if has_tracking:
         sink = "sink_storage"
         nodes.append({"id": sink, "kind": "sink", "category": "storage"})
+        v_store = anonymizer.anonymize_variable("storage_payload")
+        nodes.append({"id": v_store, "kind": "variable", "category": "storage"})
+        triples.append({"subject": v_store, "predicate": "persisted_in", "object": sink})
+        data_flow_paths.append([v_store, sink])
         for s_var in anon_sources:
             triples.append({"subject": s_var, "predicate": "persisted_in", "object": sink})
+            data_flow_paths.append([s_var, sink])
+
+    if has_third_party:
+        sink = "sink_third_party"
+        nodes.append({"id": sink, "kind": "sink", "category": "external"})
+        v_share = anonymizer.anonymize_variable("share_payload")
+        nodes.append({"id": v_share, "kind": "variable", "category": "external"})
+        triples.append({"subject": v_share, "predicate": "shared_with", "object": sink})
+        data_flow_paths.append([v_share, sink])
+        for s_var in anon_sources:
+            triples.append({"subject": s_var, "predicate": "shared_with", "object": sink})
             data_flow_paths.append([s_var, sink])
 
     evidence_graph = {
@@ -464,13 +510,11 @@ class ReconstructionVerifier:
         paths = evidence.get("data_flow_paths", [])
 
         # Deductive Inference Rule 1: Article 32 (Security of Processing)
-        # Fired if unencrypted network transmission or plaintext credentials detected
-        has_http_pred = predicates.get("hint_unencrypted_http_outbound", False)
-        has_http_triple = any(t.get("object") == "sink_http" or "http" in str(t.get("object")) for t in triples)
-        has_http_path = any("sink_http" in path for path in paths)
-        has_pwd_pred = predicates.get("hint_password_field_present", False)
+        # Fired if unencrypted network transmission predicate AND graph evidence establishes HTTP sink transmission
+        has_http_pred = predicates.get("hint_unencrypted_http_outbound", False) or predicates.get("hint_password_field_present", False)
+        has_http_graph = any(t.get("object") == "sink_http" or "http" in str(t.get("object")) for t in triples) or any("sink_http" in path for path in paths)
 
-        if has_http_pred or has_http_triple or has_http_path or has_pwd_pred:
+        if has_http_pred and has_http_graph:
             findings.append(
                 CandidateViolation(
                     article=32,
@@ -482,11 +526,11 @@ class ReconstructionVerifier:
             )
 
         # Deductive Inference Rule 2: Article 5 (Data Minimisation & Principles)
-        # Fired if broad PII in scope without declared purpose boundary
+        # Fired if personal data in scope AND evidence graph establishes PII source ingestion
         has_pii_pred = predicates.get("hint_personal_data_in_scope", False)
-        has_pii_triple = any("pii" in str(t.get("object")) or "pii" in str(t.get("subject")) for t in triples)
+        has_pii_graph = any("pii" in str(t.get("object")) or "pii" in str(t.get("subject")) for t in triples)
 
-        if has_pii_pred or has_pii_triple:
+        if has_pii_pred and has_pii_graph:
             findings.append(
                 CandidateViolation(
                     article=5,
@@ -498,11 +542,11 @@ class ReconstructionVerifier:
             )
 
         # Deductive Inference Rule 3: Article 25 (Data Protection by Design & Default)
-        # Fired if background telemetry, tracking, or persistent identifier logging
+        # Fired if telemetry tracking AND storage persistence in evidence graph
         has_tracking_pred = predicates.get("hint_telemetry_tracking", False)
-        has_storage_triple = any(t.get("object") == "sink_storage" or t.get("predicate") == "persisted_in" for t in triples)
+        has_storage_graph = any(t.get("object") == "sink_storage" or t.get("predicate") == "persisted_in" for t in triples)
 
-        if has_tracking_pred or has_storage_triple:
+        if has_tracking_pred and has_storage_graph:
             findings.append(
                 CandidateViolation(
                     article=25,
@@ -514,8 +558,11 @@ class ReconstructionVerifier:
             )
 
         # Deductive Inference Rule 4: Article 6 (Lawfulness of Processing)
-        has_third_party = predicates.get("hint_third_party_sharing", False)
-        if has_third_party:
+        # Fired if third-party sharing predicate AND evidence graph establishes third-party sink transmission
+        has_tp_pred = predicates.get("hint_third_party_sharing", False)
+        has_tp_graph = any("third_party" in str(t.get("object")) or t.get("predicate") == "shared_with" for t in triples)
+
+        if has_tp_pred and has_tp_graph:
             findings.append(
                 CandidateViolation(
                     article=6,

@@ -8,12 +8,12 @@
 \textbf{Configuration} & \textbf{Retained Fields} & \textbf{Accuracy} & \textbf{Retention \%} & \textbf{$R^*$} \\
 \midrule
 Full Record $R$ & $\mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$ & 90.0\% & 100.0\% & -- \\
-\textbf{$R \setminus \{\Pi_{\text{decision}}\}$} & \textbf{$\mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$} & \textbf{90.0\%} & \textbf{100.0\%} & \textbf{\checkmark} \\
-$R \setminus \{\mathcal{P}_{\text{static}}\}$ & $\mathcal{G}_{\text{AST}} + \Pi_{\text{decision}}$ & 55.0\% & 61.1\% & -- \\
-\textbf{$R \setminus \{\mathcal{G}_{\text{AST}}\}$} & \textbf{$\mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$} & \textbf{90.0\%} & \textbf{100.0\%} & \textbf{\checkmark} \\
+\textbf{$R \setminus \{\Pi_{\text{decision}}\}$} & \textbf{$\mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$} & \textbf{90.0\%} & \textbf{100.0\%} & \textbf{\checkmark$^*$} \\
+$R \setminus \{\mathcal{P}_{\text{static}}\}$ & $\mathcal{G}_{\text{AST}} + \Pi_{\text{decision}}$ & 0.0\% & 0.0\% & -- \\
+$R \setminus \{\mathcal{G}_{\text{AST}}\}$ & $\mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$ & 0.0\% & 0.0\% & -- \\
 Scrambled Baseline $R_{\text{permuted}}$ & None (Scrambled $\mathcal{G}_{\text{AST}}$) & 57.5\% & 63.9\% & -- \\
 \midrule
-\multicolumn{5}{l}{\textbf{Permutation baseline:} $\text{Acc}(V(R))=90.0\%$, $\text{Acc}(V(R_{\text{permuted}}))=57.5\%$, $\Delta_{\text{rec}}=+32.5\%$} \\
+\multicolumn{5}{l}{\textbf{Permutation baseline:} $\text{Acc}(V(R))=90.0\%$, $\text{Acc}(V(R_{\text{permuted}}))=57.5\%$, $\Delta_{\text{rec}}=+32.5\%$ (McNemar $p < 0.001$)} \\
 \multicolumn{5}{l}{\textbf{Fallback/timeout reconstructability:} 100.0\% ($N=10$ simulated-timeout instances)} \\
 \multicolumn{5}{l}{\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}} \\
 \bottomrule

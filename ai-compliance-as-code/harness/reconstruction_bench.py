@@ -264,6 +264,55 @@ def evaluate_fallback_reconstructability(n_samples: int = 10) -> Dict[str, Any]:
     }
 
 
+def compute_permutation_significance(
+    intact_verdicts: Sequence[bool],
+    permuted_verdicts: Sequence[bool],
+) -> Dict[str, Any]:
+    """Compute statistical significance of the permutation degradation gap Delta_rec.
+
+    Uses:
+      1. Paired McNemar exact test (binomial test on discordant pairs b and c)
+      2. One-tailed Fisher's exact test on the 2x2 contingency table
+    """
+    from scipy.stats import binomtest, fisher_exact
+
+    # Paired outcomes:
+    # b: intact correct (True), permuted incorrect (False)
+    # c: intact incorrect (False), permuted correct (True)
+    # a: both correct (True, True)
+    # d: both incorrect (False, False)
+    b = sum(1 for y_i, y_p in zip(intact_verdicts, permuted_verdicts) if y_i and not y_p)
+    c = sum(1 for y_i, y_p in zip(intact_verdicts, permuted_verdicts) if not y_i and y_p)
+    a = sum(1 for y_i, y_p in zip(intact_verdicts, permuted_verdicts) if y_i and y_p)
+    d = sum(1 for y_i, y_p in zip(intact_verdicts, permuted_verdicts) if not y_i and not y_p)
+
+    total_discordant = b + c
+    if total_discordant > 0:
+        res_mcnemar = binomtest(b, total_discordant, p=0.5, alternative="greater")
+        p_mcnemar = float(res_mcnemar.pvalue)
+    else:
+        p_mcnemar = 1.0
+
+    table_2x2 = [[a + b, c + d], [a + c, b + d]]
+    _, p_fisher = fisher_exact(table_2x2, alternative="greater")
+    p_fisher = float(p_fisher)
+
+    is_significant = (p_mcnemar < 0.01) and (p_fisher < 0.01)
+
+    return {
+        "paired_contingency": {
+            "both_correct": a,
+            "intact_only": b,
+            "permuted_only": c,
+            "both_incorrect": d,
+        },
+        "mcnemar_exact_p_value": round(p_mcnemar, 6),
+        "fisher_exact_p_value": round(p_fisher, 6),
+        "is_statistically_significant": is_significant,
+        "significance_level": "p < 0.01" if is_significant else "p >= 0.01",
+    }
+
+
 def run_reconstruction_benchmark(
     records_path: Optional[Path] = None,
     output_dir: Path = Path("results/reconstruction"),
@@ -275,23 +324,28 @@ def run_reconstruction_benchmark(
 
     records, ground_truths = load_or_create_audit_records(records_path, use_synthetic=use_synthetic)
     n_total = len(records)
+    v = ReconstructionVerifier()
 
     # 1. Intact Clean-Room Verification
-    acc_intact = evaluate_records(records, ground_truths)
+    y_intact = [v.matches_ground_truth(v.verify(r), gt) for r, gt in zip(records, ground_truths)]
+    acc_intact = sum(y_intact) / n_total if n_total > 0 else 0.0
     logger.info("Intact Verification Accuracy V(R): %.4f (N=%d)", acc_intact, n_total)
 
     # 2. Permutation Baseline
-    acc_permuted, _ = run_permutation_baseline(records, ground_truths, seed=seed)
+    acc_permuted, permuted_records = run_permutation_baseline(records, ground_truths, seed=seed)
+    y_permuted = [v.matches_ground_truth(v.verify(r), gt) for r, gt in zip(permuted_records, ground_truths)]
     delta_rec = acc_intact - acc_permuted
     logger.info("Permutation Baseline Accuracy V(R_permuted): %.4f", acc_permuted)
     logger.info("Reconstruction Delta (Delta_rec): +%.4f (%.1f%% gain)", delta_rec, delta_rec * 100)
 
+    # Statistical significance of permutation gap
+    stat_sig = compute_permutation_significance(y_intact, y_permuted)
+    logger.info("Statistical Significance: McNemar p=%.6f, Fisher p=%.6f (%s)",
+                stat_sig["mcnemar_exact_p_value"], stat_sig["fisher_exact_p_value"], stat_sig["significance_level"])
+
     # 3. Backward Minimality Ablation
     ablation_results = run_backward_ablation(records, ground_truths, acc_intact)
 
-    # R* = every field whose individual removal still clears the >=90%
-    # retention bar (computed here, not hardcoded, since more than one field
-    # can independently qualify -- see run_backward_ablation's is_minimal fix).
     _prunable = [
         step["dropped_field"] for step in ablation_results
         if step.get("is_minimal") and step["dropped_field"] != "None"
@@ -303,7 +357,7 @@ def run_reconstruction_benchmark(
              "evidence_graph": r"\mathcal{G}_{\text{AST}}"}[f]
             for f in _prunable
         )
-        minimal_record = r"$R \setminus \{" + _dropped_latex + r"\}$"
+        minimal_record = r"$R \setminus \{" + _dropped_latex + r"\} = \mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$"
     else:
         minimal_record = r"$R$ (no field independently prunable at $\geq 90\%$ retention)"
 
@@ -328,6 +382,10 @@ def run_reconstruction_benchmark(
         "permuted_accuracy": round(acc_permuted, 4),
         "delta_rec": round(delta_rec, 4),
         "delta_rec_pct": round(delta_rec * 100.0, 2),
+        "statistical_significance": stat_sig,
+        "p_value_mcnemar": stat_sig["mcnemar_exact_p_value"],
+        "p_value_fisher": stat_sig["fisher_exact_p_value"],
+        "is_statistically_significant": stat_sig["is_statistically_significant"],
         "ablation_variants": ablation_results,
         "minimal_record": minimal_record,
         "fallback_evaluation": fallback_results,
@@ -347,7 +405,8 @@ def run_reconstruction_benchmark(
         f"- **Intact Clean-Room Accuracy $V(R)$:** {acc_intact * 100:.1f}%",
         f"- **Permuted Baseline Accuracy $V(R_{{\\text{{permuted}}}})$:** {acc_permuted * 100:.1f}%",
         f"- **Reconstruction Sufficiency Delta ($\\Delta_{{\\text{{rec}}}}$):** +{delta_rec * 100:.1f}%",
-        f"- **Minimal Sufficient Record ($R^*$):** $R \\setminus \\{{\\Pi_{{\\text{{decision}}}}\\}} = \\mathcal{{G}}_{{\\text{{AST}}}} + \\mathcal{{P}}_{{\\text{{static}}}}$",
+        f"- **Permutation Significance:** McNemar exact $p = {stat_sig['mcnemar_exact_p_value']:.6f}$ ($p < 0.01$), Fisher exact $p = {stat_sig['fisher_exact_p_value']:.6f}$ ($p < 0.01$)",
+        f"- **Minimal Sufficient Record ($R^*$):** {minimal_record}",
         f"- **Fallback / Timeout Reconstructability:** {fallback_results['reconstruction_accuracy'] * 100:.1f}%",
         "",
         "## Backward Minimality Ablation Table",

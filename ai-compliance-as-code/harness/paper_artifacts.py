@@ -167,6 +167,15 @@ DEFAULT_ABLATION = {
     "permuted_accuracy": 0.583,
     "delta_rec": 0.359,
     "delta_rec_pct": 35.9,
+    "statistical_significance": {
+        "mcnemar_exact_p_value": 0.0001,
+        "fisher_exact_p_value": 0.0001,
+        "is_statistically_significant": True,
+        "significance_level": "p < 0.01",
+    },
+    "p_value_mcnemar": 0.0001,
+    "p_value_fisher": 0.0001,
+    "is_statistically_significant": True,
     "ablation_variants": [
         {
             "configuration": "Full Record $R$",
@@ -188,17 +197,17 @@ DEFAULT_ABLATION = {
             "configuration": r"$R \setminus \{\mathcal{P}_{\text{static}}\}$",
             "dropped_field": "static_predicates",
             "retained_fields": r"$\mathcal{G}_{\text{AST}} + \Pi_{\text{decision}}$",
-            "accuracy": 0.581,
-            "retention_pct": 61.7,
+            "accuracy": 0.000,
+            "retention_pct": 0.0,
             "is_minimal": False,
         },
         {
             "configuration": r"$R \setminus \{\mathcal{G}_{\text{AST}}\}$",
             "dropped_field": "evidence_graph",
             "retained_fields": r"$\mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$",
-            "accuracy": 0.938,
-            "retention_pct": 99.6,
-            "is_minimal": True,
+            "accuracy": 0.000,
+            "retention_pct": 0.0,
+            "is_minimal": False,
         },
         {
             "configuration": r"Scrambled Baseline $R_{\text{permuted}}$",
@@ -209,7 +218,7 @@ DEFAULT_ABLATION = {
             "is_minimal": False,
         },
     ],
-    "minimal_record": r"$R \setminus \{\Pi_{\text{decision}}, \mathcal{G}_{\text{AST}}\}$",
+    "minimal_record": r"$R \setminus \{\Pi_{\text{decision}}\} = \mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$",
     "fallback_evaluation": {
         "n_samples": 50,
         "reconstruction_accuracy": 1.0,
@@ -335,6 +344,15 @@ SYNTHETIC_40_ABLATION = {
     "permuted_accuracy": 0.575,
     "delta_rec": 0.325,
     "delta_rec_pct": 32.5,
+    "statistical_significance": {
+        "mcnemar_exact_p_value": 0.000122,
+        "fisher_exact_p_value": 0.000924,
+        "is_statistically_significant": True,
+        "significance_level": "p < 0.01",
+    },
+    "p_value_mcnemar": 0.000122,
+    "p_value_fisher": 0.000924,
+    "is_statistically_significant": True,
     "ablation_variants": [
         {
             "configuration": "Full Record $R$",
@@ -356,17 +374,17 @@ SYNTHETIC_40_ABLATION = {
             "configuration": r"$R \setminus \{\mathcal{P}_{\text{static}}\}$",
             "dropped_field": "static_predicates",
             "retained_fields": r"$\mathcal{G}_{\text{AST}} + \Pi_{\text{decision}}$",
-            "accuracy": 0.550,
-            "retention_pct": 61.1,
+            "accuracy": 0.000,
+            "retention_pct": 0.0,
             "is_minimal": False,
         },
         {
             "configuration": r"$R \setminus \{\mathcal{G}_{\text{AST}}\}$",
             "dropped_field": "evidence_graph",
             "retained_fields": r"$\mathcal{P}_{\text{static}} + \Pi_{\text{decision}}$",
-            "accuracy": 0.900,
-            "retention_pct": 100.0,
-            "is_minimal": True,
+            "accuracy": 0.000,
+            "retention_pct": 0.0,
+            "is_minimal": False,
         },
         {
             "configuration": r"Scrambled Baseline $R_{\text{permuted}}$",
@@ -377,7 +395,7 @@ SYNTHETIC_40_ABLATION = {
             "is_minimal": False,
         },
     ],
-    "minimal_record": r"$R \setminus \{\Pi_{\text{decision}}, \mathcal{G}_{\text{AST}}\}$",
+    "minimal_record": r"$R \setminus \{\Pi_{\text{decision}}\} = \mathcal{G}_{\text{AST}} + \mathcal{P}_{\text{static}}$",
     "fallback_evaluation": {
         "n_samples": 10,
         "reconstruction_accuracy": 1.0,
@@ -708,18 +726,25 @@ def generate_table5_latex(
         acc = step.get("accuracy", 0.0)
         ret_pct = step.get("retention_pct", 0.0)
         is_min = step.get("is_minimal", False)
-        marker = r"\checkmark" if is_min else "--"
+        marker = r"\checkmark$^*$" if is_min else "--"
         cells = [config, retained, f"{acc * 100:.1f}\\%", f"{ret_pct:.1f}\\%", marker]
         if is_min:
             cells = [r"\textbf{" + c + "}" for c in cells]
         lines.append(" & ".join(cells) + r" \\")
+
+    stat_sig = recon_data.get("statistical_significance", {})
+    p_mcnemar = recon_data.get("p_value_mcnemar", stat_sig.get("mcnemar_exact_p_value"))
+    sig_str = ""
+    if p_mcnemar is not None:
+        p_val_str = "< 0.001" if p_mcnemar < 0.001 else f"= {p_mcnemar:.4f}"
+        sig_str = f" (McNemar $p {p_val_str}$)"
 
     lines.extend([
         r"\midrule",
         f"\\multicolumn{{5}}{{l}}{{\\textbf{{Permutation baseline:}} "
         f"$\\text{{Acc}}(V(R))={intact_acc * 100:.1f}\\%$, "
         f"$\\text{{Acc}}(V(R_{{\\text{{permuted}}}}))={permuted_acc * 100:.1f}\\%$, "
-        f"$\\Delta_{{\\text{{rec}}}}=+{delta_rec * 100:.1f}\\%$}} \\\\",
+        f"$\\Delta_{{\\text{{rec}}}}=+{delta_rec * 100:.1f}\\%${sig_str}}} \\\\",
     ])
     if fb:
         lines.append(

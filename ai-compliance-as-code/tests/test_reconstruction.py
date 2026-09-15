@@ -22,7 +22,9 @@ Verifies:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -41,6 +43,7 @@ from harness.paper_artifacts import (
     generate_table5_latex,
 )
 from harness.reconstruction_bench import (
+    compute_permutation_significance,
     evaluate_fallback_reconstructability,
     evaluate_records,
     load_or_create_audit_records,
@@ -48,7 +51,7 @@ from harness.reconstruction_bench import (
     run_permutation_baseline,
     run_reconstruction_benchmark,
 )
-from harness.validate_latex import validate_latex_content
+from harness.validate_latex import validate_latex_content, validate_latex_file
 
 # A realistic snippet with distinctive raw identifiers that must never
 # appear in the anonymized record: a function name, and two variable names
@@ -203,29 +206,26 @@ def test_full_benchmark_reports_positive_delta_rec(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# 4. Backward ablation stopping criteria
+# 4. Backward ablation stopping criteria & Minimal Record R*
 # --------------------------------------------------------------------------- #
 
-def test_backward_ablation_identifies_static_predicates_as_load_bearing():
-    """On the synthetic fixture, static_predicates is the only field whose
-    removal actually costs accuracy — decision_provenance never contains
-    rule_id (see module docstring / audit/reconstruction.py's design note),
-    and evidence_graph's triples are a redundant fallback signal the
-    verifier's rules also check via static_predicates directly (e.g. Rule 1
-    fires on hint_unencrypted_http_outbound OR an http-sink triple) — so
-    both are individually prunable at >=90% retention while
-    static_predicates is not."""
+def test_backward_ablation_identifies_minimal_record_and_load_bearing_components():
+    """Verify that removing minimal sufficient components (evidence_graph or
+    static_predicates) causes a measurable drop in reconstructability (<90% retention),
+    while decision_provenance is prunable (>=90% retention)."""
     records, ground_truths = load_or_create_audit_records(use_synthetic=True)
     acc_intact = evaluate_records(records, ground_truths)
     steps = run_backward_ablation(records, ground_truths, acc_intact)
 
     by_field = {s["dropped_field"]: s for s in steps if s["dropped_field"] != "None"}
 
+    # decision_provenance is prunable (>=90% retention, is_minimal=True)
     assert by_field["decision_provenance"]["retention_pct"] >= 90.0
     assert by_field["decision_provenance"]["is_minimal"] is True
 
-    assert by_field["evidence_graph"]["retention_pct"] >= 90.0
-    assert by_field["evidence_graph"]["is_minimal"] is True
+    # Both evidence_graph and static_predicates are load-bearing minimal sufficient components
+    assert by_field["evidence_graph"]["retention_pct"] < 90.0
+    assert by_field["evidence_graph"]["is_minimal"] is False
 
     assert by_field["static_predicates"]["retention_pct"] < 90.0
     assert by_field["static_predicates"]["is_minimal"] is False
@@ -265,25 +265,141 @@ def test_abstain_record_reconstructs_to_defer_before_matching():
 
 
 # --------------------------------------------------------------------------- #
-# 6. Table 5 Publication Artifact & LaTeX Validation
+# 6. Adversarial Audit Tests (Contribution C3 Checks 1 - 4)
 # --------------------------------------------------------------------------- #
 
-def test_table5_latex_validates_without_errors():
-    tex_default = generate_table5_latex(DEFAULT_ABLATION, sample_count=887)
-    errors_default = validate_latex_content(tex_default, filename="table5_default.tex")
-    assert errors_default == []
+def test_adversarial_clean_room_boundary_and_leakage():
+    """Check 1: Confirm AuditRecord.to_dict() and JSON contain strictly zero identifiers
+    from raw code, variables/functions/classes map to synthetic tokens, and verifier
+    does not import or read from harness.evaluate, ground-truth dicts, or disk."""
+    import ast
+    import inspect
 
-    tex_synth = generate_table5_latex(SYNTHETIC_40_ABLATION, sample_count=40)
-    errors_synth = validate_latex_content(tex_synth, filename="table5_synth.tex")
-    assert errors_synth == []
+    code_snippet = """
+    public class UserPaymentCredentialHandler {
+        public void transmitUserCredentials(String userEmail, String userPassword, HttpURLConnection conn, URL url) {
+            String email = "user@example.com";
+            String password = "superSecretPassword123";
+            conn.connect();
+        }
+    }
+    """
+    record, raw_identifiers = build_audit_record(
+        code=code_snippet,
+        ground_truth=[32],
+        routing_action="symbolic",
+    )
+
+    # 1. Ensure raw identifiers actually captured the target tokens
+    for expected_tok in ["UserPaymentCredentialHandler", "transmitUserCredentials", "userEmail", "userPassword", "email", "password", "conn", "url"]:
+        assert expected_tok in raw_identifiers
+
+    # 2. Check no identifier names (email, password, conn, HttpURLConnection, url) appear in evidence_graph
+    target_forbidden = ["email", "password", "conn", "HttpURLConnection", "url"]
+    ok_graph, leaked_graph = IdentifierAnonymizer.audit_evidence_graph_clean(record.evidence_graph, target_forbidden)
+    assert ok_graph is True, f"Forbidden identifiers leaked into evidence_graph: {leaked_graph}"
+
+    # 3. Verify all variables, methods, and classes map strictly to synthetic tokens (var_X, fn_Y, class_Z)
+    node_ids = {n["id"] for n in record.evidence_graph["nodes"]}
+    for nid in node_ids:
+        assert (
+            nid.startswith("var_")
+            or nid.startswith("fn_")
+            or nid.startswith("class_")
+            or nid.startswith("sink_")
+            or nid.startswith("source_")
+        ), f"Node ID {nid!r} violates synthetic / abstract ontology token convention"
+
+    # 4. Assert verifier V(R) does not import harness.evaluate, ground truth dicts, or read disk
+    import audit.reconstruction as recon_module
+    module_src = inspect.getsource(recon_module)
+    parsed = ast.parse(module_src)
+
+    imported_names = []
+    for node in ast.walk(parsed):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_names.append(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imported_names.append(node.module)
+
+    assert not any("harness" in name for name in imported_names), f"audit.reconstruction must not import harness: {imported_names}"
+    assert not any("evaluate" in name for name in imported_names), f"audit.reconstruction must not import evaluate: {imported_names}"
+
+    # 5. Verify ReconstructionVerifier.verify accepts only AuditRecord and does not read disk
+    verifier = ReconstructionVerifier()
+    cands = verifier.verify(record)
+    assert len(cands) > 0
+    assert all(isinstance(c, CandidateViolation) for c in cands)
 
 
-def test_table5_latex_contains_required_booktabs_and_preliminary_caveat():
+def test_adversarial_statistical_significance_of_permutation_gap():
+    """Check 2: Verify that Delta_rec = Acc(V(R)) - Acc(V(R_permuted)) is statistically
+    significant (McNemar exact test and Fisher exact test p < 0.01)."""
+    records, ground_truths = load_or_create_audit_records(use_synthetic=True)
+    v = ReconstructionVerifier()
+
+    y_intact = [v.matches_ground_truth(v.verify(r), gt) for r, gt in zip(records, ground_truths)]
+    _, permuted_records = run_permutation_baseline(records, ground_truths, seed=42)
+    y_permuted = [v.matches_ground_truth(v.verify(r), gt) for r, gt in zip(permuted_records, ground_truths)]
+
+    stat_sig = compute_permutation_significance(y_intact, y_permuted)
+
+    # Assert exact p-values < 0.01
+    assert stat_sig["mcnemar_exact_p_value"] < 0.01, f"McNemar p={stat_sig['mcnemar_exact_p_value']} not < 0.01"
+    assert stat_sig["fisher_exact_p_value"] < 0.01, f"Fisher p={stat_sig['fisher_exact_p_value']} not < 0.01"
+    assert stat_sig["is_statistically_significant"] is True
+    assert stat_sig["significance_level"] == "p < 0.01"
+
+
+def test_adversarial_backward_ablation_monotonicity_and_r_star():
+    """Check 3: Check that removing minimal sufficient components (evidence_graph or
+    static_predicates) causes a measurable drop in reconstructability, and confirm
+    that R* is the exact subset marked with an asterisk in Table 5."""
+    records, ground_truths = load_or_create_audit_records(use_synthetic=True)
+    acc_intact = evaluate_records(records, ground_truths)
+    steps = run_backward_ablation(records, ground_truths, acc_intact)
+
+    by_field = {s["dropped_field"]: s for s in steps if s["dropped_field"] != "None"}
+
+    # Removal of minimal sufficient components causes measurable drop
+    assert by_field["evidence_graph"]["accuracy"] < acc_intact
+    assert by_field["evidence_graph"]["retention_pct"] < 90.0
+    assert by_field["static_predicates"]["accuracy"] < acc_intact
+    assert by_field["static_predicates"]["retention_pct"] < 90.0
+
+    # Decision provenance removal retains 100%
+    assert by_field["decision_provenance"]["accuracy"] == pytest.approx(acc_intact)
+    assert by_field["decision_provenance"]["retention_pct"] == 100.0
+
+    # Table 5 renders R* with an asterisk
     tex = generate_table5_latex(SYNTHETIC_40_ABLATION, sample_count=40)
-    assert r"\toprule" in tex
-    assert r"\midrule" in tex
-    assert r"\bottomrule" in tex
-    assert "N=40" in tex
-    assert r"\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in tex
-    assert r"\checkmark" in tex
+    assert r"$R \setminus \{\Pi_{\text{decision}}\}$" in tex
+    assert r"\checkmark$^*$" in tex
+
+
+def test_adversarial_latex_and_artifact_integrity():
+    """Check 4: Validate paper/artifacts/table5_reconstructability_ablation.tex under
+    booktabs, ensure no unescaped underscores, and verify dynamic preliminary caveat."""
+    t5_path = Path("paper/artifacts/table5_reconstructability_ablation.tex")
+    assert t5_path.exists()
+
+    # Validate syntax via LaTeXValidator
+    errors = validate_latex_file(t5_path)
+    assert errors == [], f"LaTeX syntax validation failed: {errors}"
+
+    content = t5_path.read_text(encoding="utf-8")
+    # Booktabs rules
+    assert r"\toprule" in content
+    assert r"\midrule" in content
+    assert r"\bottomrule" in content
+    # No unescaped underscores
+    non_math_underscores = [
+        m.group(0) for m in re.finditer(r"(?<!\\)_(?![^{]*\})", re.sub(r"\$[^$]+\$", "", content))
+    ]
+    assert len(non_math_underscores) == 0, f"Found unescaped underscores: {non_math_underscores}"
+    # Dynamic preliminary caveat
+    assert r"\textit{Note: Preliminary sample evaluation ($N=40$); final results await completion of full benchmark run.}" in content
+
 
