@@ -1,0 +1,542 @@
+[
+  {
+    "case_id": "RE2-TT_ts-auth-service_cpu_1",
+    "service": "ts-auth-service",
+    "fault_type": "cpu",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_cpu_2",
+    "service": "ts-auth-service",
+    "fault_type": "cpu",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_cpu_3",
+    "service": "ts-auth-service",
+    "fault_type": "cpu",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_delay_1",
+    "service": "ts-auth-service",
+    "fault_type": "delay",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_delay_2",
+    "service": "ts-auth-service",
+    "fault_type": "delay",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_delay_3",
+    "service": "ts-auth-service",
+    "fault_type": "delay",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_disk_1",
+    "service": "ts-auth-service",
+    "fault_type": "disk",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_disk_2",
+    "service": "ts-auth-service",
+    "fault_type": "disk",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_disk_3",
+    "service": "ts-auth-service",
+    "fault_type": "disk",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_loss_1",
+    "service": "ts-auth-service",
+    "fault_type": "loss",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_loss_2",
+    "service": "ts-auth-service",
+    "fault_type": "loss",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_loss_3",
+    "service": "ts-auth-service",
+    "fault_type": "loss",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_mem_1",
+    "service": "ts-auth-service",
+    "fault_type": "memory",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_mem_2",
+    "service": "ts-auth-service",
+    "fault_type": "memory",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_mem_3",
+    "service": "ts-auth-service",
+    "fault_type": "memory",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_socket_1",
+    "service": "ts-auth-service",
+    "fault_type": "socket",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_socket_2",
+    "service": "ts-auth-service",
+    "fault_type": "socket",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-auth-service_socket_3",
+    "service": "ts-auth-service",
+    "fault_type": "socket",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_cpu_1",
+    "service": "ts-order-service",
+    "fault_type": "cpu",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_cpu_2",
+    "service": "ts-order-service",
+    "fault_type": "cpu",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_cpu_3",
+    "service": "ts-order-service",
+    "fault_type": "cpu",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_delay_1",
+    "service": "ts-order-service",
+    "fault_type": "delay",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_delay_2",
+    "service": "ts-order-service",
+    "fault_type": "delay",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_delay_3",
+    "service": "ts-order-service",
+    "fault_type": "delay",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_disk_1",
+    "service": "ts-order-service",
+    "fault_type": "disk",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_disk_2",
+    "service": "ts-order-service",
+    "fault_type": "disk",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_disk_3",
+    "service": "ts-order-service",
+    "fault_type": "disk",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_loss_1",
+    "service": "ts-order-service",
+    "fault_type": "loss",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_loss_2",
+    "service": "ts-order-service",
+    "fault_type": "loss",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_loss_3",
+    "service": "ts-order-service",
+    "fault_type": "loss",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_mem_1",
+    "service": "ts-order-service",
+    "fault_type": "memory",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_mem_2",
+    "service": "ts-order-service",
+    "fault_type": "memory",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_mem_3",
+    "service": "ts-order-service",
+    "fault_type": "memory",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_socket_1",
+    "service": "ts-order-service",
+    "fault_type": "socket",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_socket_2",
+    "service": "ts-order-service",
+    "fault_type": "socket",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-order-service_socket_3",
+    "service": "ts-order-service",
+    "fault_type": "socket",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_cpu_1",
+    "service": "ts-route-service",
+    "fault_type": "cpu",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_cpu_2",
+    "service": "ts-route-service",
+    "fault_type": "cpu",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_cpu_3",
+    "service": "ts-route-service",
+    "fault_type": "cpu",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_delay_1",
+    "service": "ts-route-service",
+    "fault_type": "delay",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_delay_2",
+    "service": "ts-route-service",
+    "fault_type": "delay",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_delay_3",
+    "service": "ts-route-service",
+    "fault_type": "delay",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_disk_1",
+    "service": "ts-route-service",
+    "fault_type": "disk",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_disk_2",
+    "service": "ts-route-service",
+    "fault_type": "disk",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_disk_3",
+    "service": "ts-route-service",
+    "fault_type": "disk",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_loss_1",
+    "service": "ts-route-service",
+    "fault_type": "loss",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_loss_2",
+    "service": "ts-route-service",
+    "fault_type": "loss",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_loss_3",
+    "service": "ts-route-service",
+    "fault_type": "loss",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_mem_1",
+    "service": "ts-route-service",
+    "fault_type": "memory",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_mem_2",
+    "service": "ts-route-service",
+    "fault_type": "memory",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_mem_3",
+    "service": "ts-route-service",
+    "fault_type": "memory",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_socket_1",
+    "service": "ts-route-service",
+    "fault_type": "socket",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_socket_2",
+    "service": "ts-route-service",
+    "fault_type": "socket",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-route-service_socket_3",
+    "service": "ts-route-service",
+    "fault_type": "socket",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_cpu_1",
+    "service": "ts-train-service",
+    "fault_type": "cpu",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_cpu_2",
+    "service": "ts-train-service",
+    "fault_type": "cpu",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_cpu_3",
+    "service": "ts-train-service",
+    "fault_type": "cpu",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_delay_1",
+    "service": "ts-train-service",
+    "fault_type": "delay",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_delay_2",
+    "service": "ts-train-service",
+    "fault_type": "delay",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_delay_3",
+    "service": "ts-train-service",
+    "fault_type": "delay",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_disk_1",
+    "service": "ts-train-service",
+    "fault_type": "disk",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_disk_2",
+    "service": "ts-train-service",
+    "fault_type": "disk",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_disk_3",
+    "service": "ts-train-service",
+    "fault_type": "disk",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_loss_1",
+    "service": "ts-train-service",
+    "fault_type": "loss",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_loss_2",
+    "service": "ts-train-service",
+    "fault_type": "loss",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_loss_3",
+    "service": "ts-train-service",
+    "fault_type": "loss",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_mem_1",
+    "service": "ts-train-service",
+    "fault_type": "memory",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_mem_2",
+    "service": "ts-train-service",
+    "fault_type": "memory",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_mem_3",
+    "service": "ts-train-service",
+    "fault_type": "memory",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_socket_1",
+    "service": "ts-train-service",
+    "fault_type": "socket",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_socket_2",
+    "service": "ts-train-service",
+    "fault_type": "socket",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-train-service_socket_3",
+    "service": "ts-train-service",
+    "fault_type": "socket",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_cpu_1",
+    "service": "ts-travel-service",
+    "fault_type": "cpu",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_cpu_2",
+    "service": "ts-travel-service",
+    "fault_type": "cpu",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_cpu_3",
+    "service": "ts-travel-service",
+    "fault_type": "cpu",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_delay_1",
+    "service": "ts-travel-service",
+    "fault_type": "delay",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_delay_2",
+    "service": "ts-travel-service",
+    "fault_type": "delay",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_delay_3",
+    "service": "ts-travel-service",
+    "fault_type": "delay",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_disk_1",
+    "service": "ts-travel-service",
+    "fault_type": "disk",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_disk_2",
+    "service": "ts-travel-service",
+    "fault_type": "disk",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_disk_3",
+    "service": "ts-travel-service",
+    "fault_type": "disk",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_loss_1",
+    "service": "ts-travel-service",
+    "fault_type": "loss",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_loss_2",
+    "service": "ts-travel-service",
+    "fault_type": "loss",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_loss_3",
+    "service": "ts-travel-service",
+    "fault_type": "loss",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_mem_1",
+    "service": "ts-travel-service",
+    "fault_type": "memory",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_mem_2",
+    "service": "ts-travel-service",
+    "fault_type": "memory",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_mem_3",
+    "service": "ts-travel-service",
+    "fault_type": "memory",
+    "repeat": 3
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_socket_1",
+    "service": "ts-travel-service",
+    "fault_type": "socket",
+    "repeat": 1
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_socket_2",
+    "service": "ts-travel-service",
+    "fault_type": "socket",
+    "repeat": 2
+  },
+  {
+    "case_id": "RE2-TT_ts-travel-service_socket_3",
+    "service": "ts-travel-service",
+    "fault_type": "socket",
+    "repeat": 3
+  }
+]

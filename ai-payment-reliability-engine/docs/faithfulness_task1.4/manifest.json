@@ -1,0 +1,99 @@
+{
+  "timestamp": "20260915T160745Z",
+  "git_sha": "19f0e156",
+  "task": "1.4",
+  "dataset": "RE2-TT",
+  "seed": 42,
+  "n_draw": 15,
+  "probe_size": 10,
+  "per_class_draw_counts": {
+    "cpu": 3,
+    "delay": 2,
+    "disk": 2,
+    "loss": 2,
+    "memory": 3,
+    "socket": 3
+  },
+  "extra_classes": [
+    "cpu",
+    "memory",
+    "socket"
+  ],
+  "drawn_case_ids": [
+    "RE2-TT_ts-auth-service_delay_3",
+    "RE2-TT_ts-auth-service_disk_2",
+    "RE2-TT_ts-auth-service_mem_2",
+    "RE2-TT_ts-auth-service_socket_1",
+    "RE2-TT_ts-order-service_cpu_1",
+    "RE2-TT_ts-order-service_cpu_2",
+    "RE2-TT_ts-order-service_delay_1",
+    "RE2-TT_ts-route-service_mem_3",
+    "RE2-TT_ts-route-service_socket_1",
+    "RE2-TT_ts-train-service_cpu_3",
+    "RE2-TT_ts-train-service_disk_3",
+    "RE2-TT_ts-train-service_loss_2",
+    "RE2-TT_ts-train-service_loss_3",
+    "RE2-TT_ts-train-service_socket_1",
+    "RE2-TT_ts-travel-service_mem_3"
+  ],
+  "probe_case_ids": [
+    "RE2-TT_ts-auth-service_delay_3",
+    "RE2-TT_ts-auth-service_disk_2",
+    "RE2-TT_ts-auth-service_mem_2",
+    "RE2-TT_ts-auth-service_socket_1",
+    "RE2-TT_ts-order-service_cpu_1",
+    "RE2-TT_ts-order-service_cpu_2",
+    "RE2-TT_ts-order-service_delay_1",
+    "RE2-TT_ts-route-service_mem_3",
+    "RE2-TT_ts-route-service_socket_1",
+    "RE2-TT_ts-train-service_cpu_3"
+  ],
+  "rca_model_digest": "ollama:llama3.1",
+  "chat_judge_model_digest": "ollama:qwen3.8:27b",
+  "probe_model_digest": "ollama:qwen3.8:27b",
+  "probe_judge_digest": "ollama:llama3.1",
+  "nli_model": "cross-encoder/nli-deberta-v3-base",
+  "population_sums": {
+    "production": 34,
+    "control": 20,
+    "adversarial": 60,
+    "total": 114
+  },
+  "adversarial_subtype_counts": {
+    "topic_mismatch": 20,
+    "metric_inversion": 20,
+    "causal_misattribution": 20
+  },
+  "faithfulness": {
+    "n": 114,
+    "n_stage2_invalid": 0,
+    "judges": [
+      "chat_model",
+      "nli_cross_encoder"
+    ],
+    "caveats": [
+      "NLI scores are NOT averaged into any faithfulness number; only nli_corroboration_rate (chat-faithful claims NLI also rates >= 0.8) is reported. See PROTOCOL.md."
+    ],
+    "stage1_pass_rate": 1.0,
+    "stage2_pass_rate": 0.2807017543859649,
+    "overall_faithful_rate": 0.2807017543859649,
+    "avg_faithfulness_score": 0.3250877192982456,
+    "nli_corroboration_rate": 0.46153846153846156,
+    "nli_confirm_threshold": 0.8,
+    "nli_corroboration_rate_all_populations": 0.1875
+  },
+  "probe_faithfulness": {
+    "n": 37,
+    "n_stage2_invalid": 0,
+    "judges": [
+      "chat_model"
+    ],
+    "caveats": [],
+    "stage1_pass_rate": 1.0,
+    "stage2_pass_rate": 0.972972972972973,
+    "overall_faithful_rate": 0.972972972972973,
+    "avg_faithfulness_score": 0.8162162162162163
+  },
+  "probe_failures": [],
+  "note": "Wholly separate from docs/faithfulness/judge_scores.jsonl (RE1-OB canonical study). Not appended, not merged. All conference figures citing the RE1-OB 40/9/18 study are superseded by this expanded set for any claim about RE2-TT / the expanded sample size; the RE1-OB file remains the record of what that earlier study actually measured."
+}
