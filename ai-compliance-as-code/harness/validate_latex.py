@@ -173,25 +173,24 @@ class LaTeXValidator:
             comment_idx = find_unescaped_comment_index(line)
             code_part = line[:comment_idx] if comment_idx != -1 else line
 
-            # Check \begin{...}
-            for match in re.finditer(r"\\begin\{([a-zA-Z0-9*]+)\}", code_part):
-                env_name = match.group(1)
-                env_stack.append((env_name, line_idx))
-
-            # Check \end{...}
-            for match in re.finditer(r"\\end\{([a-zA-Z0-9*]+)\}", code_part):
-                env_name = match.group(1)
-                if not env_stack:
-                    self.errors.append(
-                        f"[{self.filename}:{line_idx}] Unexpected \\end{{{env_name}}} with no active \\begin."
-                    )
+            # Check \begin{...} and \end{...} in true stream order
+            for match in re.finditer(r"\\(begin|end)\{([a-zA-Z0-9*]+)\}", code_part):
+                action = match.group(1)
+                env_name = match.group(2)
+                if action == "begin":
+                    env_stack.append((env_name, line_idx))
                 else:
-                    expected_name, start_line = env_stack.pop()
-                    if expected_name != env_name:
+                    if not env_stack:
                         self.errors.append(
-                            f"[{self.filename}:{line_idx}] Mismatched environment: expected \\end{{{expected_name}}} "
-                            f"(opened at line {start_line}), but found \\end{{{env_name}}}."
+                            f"[{self.filename}:{line_idx}] Unexpected \\end{{{env_name}}} with no active \\begin."
                         )
+                    else:
+                        expected_name, start_line = env_stack.pop()
+                        if expected_name != env_name:
+                            self.errors.append(
+                                f"[{self.filename}:{line_idx}] Mismatched environment: expected \\end{{{expected_name}}} "
+                                f"(opened at line {start_line}), but found \\end{{{env_name}}}."
+                            )
 
             # Brace counting (ignoring \{ and \})
             escaped_b = False
@@ -328,15 +327,36 @@ class LaTeXValidator:
                     )
 
     def _check_escaped_characters(self, lines: List[str]) -> None:
-        in_tabular = False
+        math_envs = {
+            "equation", "equation*", "align", "align*", "gather", "gather*",
+            "multline", "multline*", "split", "cases", "matrix", "bmatrix", "pmatrix",
+            "vmatrix", "Vmatrix",
+        }
+        alignment_envs = {
+            "tabular", "tabular*", "align", "align*", "split", "cases",
+            "matrix", "bmatrix", "pmatrix", "vmatrix", "Vmatrix",
+        }
+        active_envs: List[str] = []
+        in_bracket_math = False
 
         for line_idx, line in enumerate(lines, start=1):
             strip_line = line.strip()
 
-            if "\\begin{tabular}" in strip_line:
-                in_tabular = True
-            elif "\\end{tabular}" in strip_line:
-                in_tabular = False
+            # Track environment begin/end
+            for m in re.finditer(r"\\begin\{([^{}]+)\}", line):
+                active_envs.append(m.group(1).strip())
+            for m in re.finditer(r"\\end\{([^{}]+)\}", line):
+                env_name = m.group(1).strip()
+                if env_name in active_envs:
+                    active_envs.remove(env_name)
+
+            if r"\[" in line:
+                in_bracket_math = True
+            if r"\]" in line:
+                in_bracket_math = False
+
+            in_math_env = in_bracket_math or any(e in math_envs for e in active_envs)
+            in_alignment_env = any(e in alignment_envs for e in active_envs)
 
             if strip_line.startswith("%"):
                 continue
@@ -354,39 +374,40 @@ class LaTeXValidator:
                         f"In LaTeX, '%' starts a comment; write '\\%' instead."
                     )
 
-            # Check 2: Unescaped underscore outside math mode ($...$) and safe commands (\label, \input, etc.)
-            in_math = False
-            escaped_u = False
-            non_math_chars: List[str] = []
+            # Check 2: Unescaped underscore outside math mode ($...$ or display math)
+            if not in_math_env:
+                in_math = False
+                escaped_u = False
+                non_math_chars: List[str] = []
 
-            for ch in code_text:
-                if escaped_u:
-                    escaped_u = False
+                for ch in code_text:
+                    if escaped_u:
+                        escaped_u = False
+                        if not in_math:
+                            non_math_chars.append("\\" + ch)
+                        continue
+                    if ch == "\\":
+                        escaped_u = True
+                        continue
+                    if ch == "$":
+                        in_math = not in_math
+                        continue
                     if not in_math:
-                        non_math_chars.append("\\" + ch)
-                    continue
-                if ch == "\\":
-                    escaped_u = True
-                    continue
-                if ch == "$":
-                    in_math = not in_math
-                    continue
-                if not in_math:
-                    non_math_chars.append(ch)
+                        non_math_chars.append(ch)
 
-            non_math_str = "".join(non_math_chars)
-            # Exclude commands where raw underscores are valid LaTeX identifier syntax
-            safe_text = re.sub(r"\\(label|ref|pageref|cite|input|include|usepackage|documentclass|begin|end|url)\{[^{}]*\}", "", non_math_str)
+                non_math_str = "".join(non_math_chars)
+                # Exclude commands where raw underscores are valid LaTeX identifier syntax
+                safe_text = re.sub(r"\\(label|ref|pageref|cite|input|include|usepackage|documentclass|begin|end|url)\{[^{}]*\}", "", non_math_str)
 
-            for m in re.finditer(r"(?<!\\)_", safe_text):
-                snippet = safe_text[max(0, m.start() - 10):min(len(safe_text), m.end() + 10)]
-                self.errors.append(
-                    f"[{self.filename}:{line_idx}] Unescaped underscore '_' outside math mode: '...{snippet}...'. "
-                    f"Use '\\_' or place in math mode."
-                )
+                for m in re.finditer(r"(?<!\\)_", safe_text):
+                    snippet = safe_text[max(0, m.start() - 10):min(len(safe_text), m.end() + 10)]
+                    self.errors.append(
+                        f"[{self.filename}:{line_idx}] Unescaped underscore '_' outside math mode: '...{snippet}...'. "
+                        f"Use '\\_' or place in math mode."
+                    )
 
-            # Check 3: Unescaped '&' outside tabular
-            if not in_tabular:
+            # Check 3: Unescaped '&' outside tabular or math alignment environments
+            if not in_alignment_env:
                 escaped_a = False
                 for ch in code_text:
                     if escaped_a:
@@ -401,6 +422,7 @@ class LaTeXValidator:
                             f"Use '\\&' for literal ampersands."
                         )
                         break
+
 
 
 # ---------------------------------------------------------------------------

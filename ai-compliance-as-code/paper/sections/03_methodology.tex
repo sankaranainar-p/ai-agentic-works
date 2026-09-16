@@ -1,0 +1,201 @@
+\section{Methodology}
+\label{sec:methodology}
+
+This section formalizes the granularity-conditioned arbitration architecture for regulatory compliance detection in source code. We first define the compliance verification problem under asymmetric regulatory loss, contrast our bidirectional arbitration framework with unidirectional static alert filtering, and detail our feature representation, arbitration policies, confidence calibration engine, and cryptographic audit sufficiency instrument.
+
+\subsection{Problem Formulation and Asymmetric Regulatory Loss}
+\label{sec:methodology:formulation}
+
+Let $\mathcal{X}$ denote the space of source code artifacts (e.g., methods, compilation units, or repositories). A regulatory compliance analyzer inspects a code artifact $x \in \mathcal{X}$ to identify a set of non-compliance findings:
+\begin{equation}
+\mathcal{F}(x) = \left\{ \langle r, \text{severity}, \text{target}, \text{evidence} \rangle \;\middle|\; r \in \mathcal{R} \right\}
+\end{equation}
+where $\mathcal{R}$ represents the set of statutory articles under an applicable legal framework (e.g., GDPR Articles 5--49 or MiCA Articles 67--82), $\text{severity} \in \{\text{low}, \text{medium}, \text{high}\}$ characterizes operational risk, $\text{target}$ identifies the impacted software component or processing operation, and $\text{evidence}$ encapsulates the underlying program facts.
+
+Software compliance verification differs fundamentally from standard bug finding or static security alert triage in two critical dimensions:
+\begin{enumerate}
+    \item \textbf{Asymmetric Defect Penalties:} Under major regulatory regimes such as GDPR (Regulation EU 2016/679) and MiCA (Regulation EU 2023/1114), the operational consequences of classification errors are severely unbalanced. A false negative ($FN$) represents an undetected statutory violation deployed into production, exposing the organization to catastrophic regulatory enforcement, administrative fines (up to 4\% of global annual turnover under GDPR Article 83), mandatory service suspensions, or custodial liability~\cite{paramasivan2025ai}. Conversely, a false positive ($FP$) incurs developer triage and verification overhead. Consequently, the operational defect penalty satisfies $c_{FN} \gg c_{FP}$.
+    \item \textbf{High Semantic Disagreement and Epistemic Ambiguity:} Statutory obligations frequently depend on organizational context, data classification semantics, and consent gates outside the syntactic scope of an isolated code slice. Ran et al.~\cite{ran2025gdprbenchandroid} demonstrated that neither purely formal Abstract Syntax Tree (AST) analyzers nor Large Language Models (LLMs) achieve dominant performance across all regulatory articles, exhibiting orthogonal strengths across different code scopes.
+\end{enumerate}
+
+To address these conditions, we formalize compliance detection as an arbitration game between two heterogeneous automated peer experts:
+\begin{itemize}
+    \item \textbf{Symbolic Detector $S(x)$:} An AST-based and pattern-matching rule engine. $S(x)$ operates deterministically at negligible computational cost ($c_S \approx 0$), providing high precision on rigid syntactic patterns (such as unencrypted HTTP transmissions or missing null-checks). However, it exhibits high false-negative rates on complex data flows, dynamic dispatches, and semantically obscured identifier contexts.
+    \item \textbf{Neural Detector $L(x)$:} An LLM-based compliance reasoner. $L(x)$ evaluates source code via structured zero-shot or few-shot prompts. It demonstrates superior semantic comprehension of variable intent, cross-procedural taint propagation, and natural-language privacy documentation, but incurs non-negligible inference cost ($c_L > 0$), latency, and susceptibility to hallucinated false positives.
+\end{itemize}
+
+Rather than forcing an automated decision when the automated detectors disagree or exhibit low confidence, we expand the action space to a tri-choice decision set:
+\begin{equation}
+\mathcal{A} = \{S, L, H\}
+\end{equation}
+where $S$ adopts the findings of the symbolic analyzer, $L$ adopts the findings of the neural analyzer, and $H$ denotes selective abstention with deferral to a human compliance officer at marginal verification cost $c_H$.
+
+\subsection{Contrast with Unidirectional SAST Alert Triage}
+\label{sec:methodology:contrast}
+
+Prior research at the intersection of static analysis and large language models has focused predominantly on static application security testing (SAST) false-alarm reduction, including systems such as LLM4SA~\cite{wen2024automatically}, LLM4FPM~\cite{chen2024llm4fpm}, ZeroFalse~\cite{iranmanesh2025zerofalse}, SAST-Genius~\cite{agrawal2025sastgenius}, and AdaTaint~\cite{lin2025adataint}. As illustrated in Figure~\ref{fig:methodology_contrast}, our architectural formulation departs from this literature in three fundamental respects:
+
+\begin{figure*}[t]
+\centering
+\small
+\begin{tabular}{p{7.8cm}|p{8.0cm}}
+\textbf{(a) Prior Art: Unidirectional SAST Filtering} & \textbf{(b) Proposed Architecture: Bidirectional Arbitration} \\
+\midrule
+$\bullet$ \textit{Pipeline topology:} Strictly sequential waterfall & $\bullet$ \textit{Pipeline topology:} Granularity-conditioned peer arbitration \\
+\quad $\text{Code} \longrightarrow \fbox{\text{SAST Analyzer}} \xrightarrow{\text{Alerts}} \fbox{\text{LLM Filter}} \xrightarrow{\text{Filtered}} \text{Dev}$ & \quad $\text{Code } x \longrightarrow \begin{pmatrix} S(x) \\ L(x) \end{pmatrix} \xrightarrow{\phi(x)} \fbox{\textbf{Cost Router}} \xrightarrow{\pi^*(x)} \begin{cases} S & \text{symbolic} \\ L & \text{neural} \\ H & \text{human deferral} \end{cases}$ \\
+$\bullet$ \textit{Detector hierarchy:} Static analyzer is the primary generator; LLM acts strictly as a downstream filter. & $\bullet$ \textit{Detector hierarchy:} Symmetric peer detectors ($S$ and $L$) evaluated concurrently under cost-risk bounds. \\
+$\bullet$ \textit{False negative recovery:} \textbf{Zero.} If the SAST tool misses a violation, the LLM is never invoked. & $\bullet$ \textit{False negative recovery:} \textbf{Active.} Neural detector can flag compliance defects that bypass symbolic AST rules. \\
+$\bullet$ \textit{Loss objective:} Symmetric precision optimization ($F_1$ or FP pruning percentage). & $\bullet$ \textit{Loss objective:} Asymmetric regulatory loss ($c_{FN} = 1.0 \gg c_{FP} = 0.1$) with Chow-type reject option. \\
+\bottomrule
+\end{tabular}
+\caption{Architectural comparison between conventional unidirectional SAST alert filtering and the proposed bidirectional, granularity-conditioned arbitration framework.}
+\label{fig:methodology_contrast}
+\end{figure*}
+
+\begin{enumerate}
+    \item \textbf{Bidirectional Routing vs. Unidirectional Post-Processing:} Systems such as LLM4SA~\cite{wen2024automatically} and ZeroFalse~\cite{iranmanesh2025zerofalse} configure the LLM strictly as a pruning filter on top of an existing static analyzer. If the static analyzer fails to flag a violation due to rigid pattern rules (a static false negative), the slice is never presented to the LLM, leaving the defect permanently unmitigated. In contrast, our router evaluates both detectors as symmetric peers, enabling the neural model to catch syntactic omissions while allowing the symbolic detector to override neural hallucinations.
+    \item \textbf{Asymmetric Regulatory Loss vs. Alert Precision:} SAST filtering tools optimize for alert noise suppression to mitigate developer fatigue. In regulatory software engineering, suppressing an alert at the cost of incurring a false negative can cause catastrophic liability. Our arbitration framework directly embeds statutory loss weights into the routing objective.
+    \item \textbf{Selective Prediction with Human Deferral:} When detector disagreement reveals high epistemic uncertainty, relying blindly on either automated system violates corporate compliance governance~\cite{paramasivan2024acs}. By formalizing human review as an explicit third action ($H$), our system implements selective classification~\cite{chow1970optimum,madras2018predict,mozannar2020consistent}, bounding maximum operational risk.
+\end{enumerate}
+
+\subsection{Granularity-Conditioned Feature Representation}
+\label{sec:methodology:features}
+
+To arbitrate between symbolic and neural detectors at runtime without incurring redundant LLM inference overhead on every code slice, we extract a lightweight meta-feature vector $\phi(x) \in \mathbb{R}^d$ computed from the syntactic structure of $x$:
+\begin{equation}
+\phi(x) = \left[ g_{\text{file}}(x), g_{\text{module}}(x), \log_{10} L(x), \mathbb{I}_{\text{Kotlin}}(x), k_{\text{hints}}(x), \mathbf{h}(x)^T \right]^T
+\end{equation}
+where:
+\begin{itemize}
+    \item $g_{\text{file}}(x), g_{\text{module}}(x) \in \{0, 1\}$ represent one-hot encodings of the syntactic inspection granularity (file-level, module-level, or line-level scope).
+    \item $\log_{10} L(x)$ denotes the log-transformed character length of the code slice, capturing context window saturation and lexical complexity.
+    \item $\mathbb{I}_{\text{Kotlin}}(x) \in \{0, 1\}$ indicates whether the source is authored in Kotlin versus Java, reflecting language-specific syntax constructs (e.g., coroutines, extension functions, synthetic properties).
+    \item $k_{\text{hints}}(x) \in \mathbb{N}$ measures the total count of fired static AST indicators.
+    \item $\mathbf{h}(x) \in \{0, 1\}^m$ is a binary vector of specific fired syntactic indicators, including unencrypted HTTP outbound sinks (\texttt{hint\_unencrypted\_http\_outbound}), credential parameter presence (\texttt{hint\_password\_field\_present}), and personal data identifiers (\texttt{hint\_personal\_data\_in\_scope}).
+\end{itemize}
+
+Given that the two detectors disagree ($S(x) \neq L(x)$), the probability that the symbolic detector provides the correct verdict is modeled via logistic regression:
+\begin{equation}
+P(S = 1 \mid S \neq L, x) = \sigma\left( \beta_0 + \boldsymbol{\beta}^T \phi(x) \right) = \frac{1}{1 + \exp\left( -(\beta_0 + \boldsymbol{\beta}^T \phi(x)) \right)}
+\end{equation}
+The parameter vector $\boldsymbol{\beta}$ is estimated via maximum likelihood estimation across training folds in a nested cross-validation regime.
+
+\subsection{Arbitration Policies and Selective Prediction}
+\label{sec:methodology:policies}
+
+We formulate and evaluate four distinct arbitration strategies spanning static baselines, theoretical bounds, and cost-sensitive routers.
+
+\paragraph{Policy 1: Fixed Confidence Merge (Baseline)}
+This policy reflects conventional hybrid heuristics that execute both detectors unconditionally and combine their findings via a static threshold or union merge:
+\begin{equation}
+\mathcal{F}_{\text{P1}}(x) = \mathcal{F}_S(x) \cup \left\{ f \in \mathcal{F}_L(x) \;\middle|\; \text{conf}(f) \ge \theta_{\text{fixed}} \right\}
+\end{equation}
+Policy 1 always incurs the cumulative execution cost $c_S + c_L$ for every evaluated artifact, making it computationally inefficient across large codebases.
+
+\paragraph{Policy 2: Clairvoyant Oracle (Upper Bound)}
+Policy 2 serves as a theoretical performance ceiling. For each instance $x$, the oracle selects the detector that minimizes realized task loss:
+\begin{equation}
+\pi_{\text{oracle}}(x) = \arg\min_{a \in \{S, L\}} \ell(y_a(x), y^*(x))
+\end{equation}
+where $y^*(x)$ represents the true ground-truth compliance status and $\ell(\cdot)$ denotes operational loss. Policy 2 characterizes the maximum achievable performance under perfect peer complementarity.
+
+\paragraph{Policy 3: Learned Feature Router}
+Policy 3 uses the estimated disagreement probability $P(S=1 \mid S \neq L, x)$. When both detectors yield identical findings ($\mathcal{F}_S(x) = \mathcal{F}_L(x)$), the policy routes to the symbolic detector $S$, avoiding neural execution at runtime. When detectors disagree, it routes according to the maximum likelihood winner:
+\begin{equation}
+\pi_{\text{P3}}(x) = \begin{cases}
+S & \text{if } \mathcal{F}_S(x) = \mathcal{F}_L(x) \\
+S & \text{if } \mathcal{F}_S(x) \neq \mathcal{F}_L(x) \text{ and } P(S = 1 \mid S \neq L, x) \ge 0.5 \\
+L & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\paragraph{Policy 4: Cost-Sensitive Reject Router (Proposed)}
+Our primary contribution is a decision-theoretic router integrating asymmetric error costs with a Chow-type reject option~\cite{chow1970optimum,madras2018predict}. We formulate the expected conditional risk for each possible action $a \in \{S, L, H\}$:
+\begin{align}
+R(S \mid x) &= c_S + c_{FN} P(Y=1, y_S=0 \mid x) + c_{FP} P(Y=0, y_S=1 \mid x) \label{eq:risk_s} \\
+R(L \mid x) &= c_L + c_{FN} P(Y=1, y_L=0 \mid x) + c_{FP} P(Y=0, y_L=1 \mid x) \label{eq:risk_l} \\
+R(H \mid x) &= c_H + \epsilon_H \left( \frac{c_{FN} + c_{FP}}{2} \right) \label{eq:risk_h}
+\end{align}
+where $c_S$ is the symbolic execution cost ($c_S = 0.0$), $c_L$ is the neural token invocation cost ($c_L = 0.01$), $c_{FN}$ is the false-negative penalty ($c_{FN} = 1.0$), $c_{FP}$ is the false-positive penalty ($c_{FP} = 0.1$), $c_H$ is the human review cost ($c_H = 0.25$), and $\epsilon_H$ represents the residual human inspection error rate ($\epsilon_H = 0.02$).
+
+The optimal arbitration decision $\pi^*(x)$ minimizes expected conditional risk:
+\begin{equation}
+\label{eq:decision_rule}
+\pi^*(x) = \begin{cases}
+H \quad (\text{abstain / defer to human}) & \text{if } \min\left( R(S \mid x), R(L \mid x) \right) \ge R(H \mid x) \\
+\arg\min_{a \in \{S, L\}} R(a \mid x) & \text{otherwise}
+\end{cases}
+\end{equation}
+When the router defers ($\pi^*(x) = H$), both candidate findings sets $\mathcal{F}_S(x)$ and $\mathcal{F}_L(x)$ are bundled into an audit package for human verification. In parametric sensitivity evaluations, the effective human cost $c_H$ is modulated via threshold $\tau \in [0.1, 0.9]$ to trace the complete empirical risk-coverage Pareto frontier.
+
+\subsection{Confidence Calibration and Continuous Risk Conditioning}
+\label{sec:methodology:calibration}
+
+To evaluate conditional error probabilities $P(Y \neq y_a \mid x)$ dynamically rather than relying on global error rates, Policy 4 incorporates the verbalized confidence $c_L(x) \in [0.0, 1.0]$ elicited from the neural model alongside the symbolic rule confidence $c_S(x) \in [0.0, 1.0]$.
+
+When the symbolic analyzer flags a candidate violation ($y_S=1$) while the neural analyzer detects no violation ($y_L=0$):
+\begin{align}
+P(\text{error}_S \mid x) &= \frac{(1 - P(S \text{ wins})) + (1 - c_S(x))}{2} \\
+P(\text{error}_L \mid x) &= \frac{P(S \text{ wins}) + c_S(x)}{2}
+\end{align}
+Conversely, when the neural detector flags a violation ($y_L=1$) that the symbolic detector misses ($y_S=0$):
+\begin{align}
+P(\text{error}_L \mid x) &= \frac{P(S \text{ wins}) + (1 - c_L(x))}{2} \\
+P(\text{error}_S \mid x) &= \frac{(1 - P(S \text{ wins})) + c_L(x)}{2}
+\end{align}
+These continuous probabilities are substituted directly into Equations~(\ref{eq:risk_s}) and (\ref{eq:risk_l}), coupling operational risk directly to detector confidence.
+
+To ensure that elicited confidences reflect empirical probabilities rather than uncalibrated overconfidence, we evaluate detector calibration using Murphy's vector partition of the Brier score~\cite{murphy1973new}:
+\begin{equation}
+\text{BS} = \frac{1}{N} \sum_{i=1}^N (c_i - y_i)^2 = \text{REL} - \text{RES} + \text{UNC}
+\end{equation}
+For $M$ discrete confidence bins with sample counts $n_m$, empirical base rates $\bar{y}_m = \frac{1}{n_m} \sum_{i \in B_m} y_i$, and mean confidences $\bar{p}_m = \frac{1}{n_m} \sum_{i \in B_m} c_i$, the components are defined as:
+\begin{align}
+\text{REL} &= \sum_{m=1}^M \frac{n_m}{N} (\bar{p}_m - \bar{y}_m)^2 \quad (\text{Reliability / Calibration Error}) \\
+\text{RES} &= \sum_{m=1}^M \frac{n_m}{N} (\bar{y}_m - \bar{y})^2 \quad (\text{Resolution / Sorting Power}) \\
+\text{UNC} &= \bar{y}(1 - \bar{y}) \quad (\text{Uncertainty / Inherent Entropy})
+\end{align}
+where $\bar{y} = \frac{1}{N} \sum_{i=1}^N y_i$ is the global base rate. We employ equal-frequency quantile binning ($M=5$) with ordinal rank tie-breaking to avoid empty bins. For each bin $m$, we report empirical accuracy alongside the two-sided Wilson 95\% score margin of error~\cite{murphy1973new}:
+\begin{equation}
+\text{MoE}_{95}(m) = \frac{z_{0.975}}{1 + \frac{z_{0.975}^2}{n_m}} \sqrt{\frac{\bar{y}_m(1 - \bar{y}_m)}{n_m} + \frac{z_{0.975}^2}{4 n_m^2}}
+\end{equation}
+where $z_{0.975} \approx 1.95996$.
+
+\subsection{Cryptographic Provenance and Audit Sufficiency}
+\label{sec:methodology:audit}
+
+A compliance verdict generated by automated AI pipelines is legally indefensible unless accompanied by an evidentiary audit trail sufficient for an independent external auditor to verify the determination without re-running non-deterministic inference~\cite{paramasivan2025ai}.
+
+We formalize an immutable audit record schema $R$ structured according to the W3C PROV-DM standard~\cite{moreau2013prov}:
+\begin{equation}
+R = \langle \mathcal{G}_{\text{AST}}, \mathcal{P}_{\text{static}}, \mathcal{D}_{\text{prov}}, \mathcal{H}_{\text{crypto}} \rangle
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathcal{G}_{\text{AST}} = (V_{\text{AST}}, E_{\text{AST}})$ is an anonymized data-flow graph where all source-code identifiers (variables, functions, and class names) are strictly alpha-renamed into abstract ontology symbols (\texttt{var\_X}, \texttt{fn\_Y}, \texttt{class\_Z}) via an identifier redactor. Abstract data sources and sinks are mapped to standardized semantic categories (\texttt{source\_pii\_contact}, \texttt{source\_auth\_credential}, \texttt{sink\_http}, \texttt{sink\_storage}).
+    \item $\mathcal{P}_{\text{static}} \in \{0, 1\}^k$ denotes the set of evaluated boolean static predicates (e.g., unencrypted network transport, credential exposure).
+    \item $\mathcal{D}_{\text{prov}}$ captures execution provenance: chosen routing action $\pi^* \in \{S, L, H\}$, calibrated confidence $c \in [0.0, 1.0]$, operational risk estimates, and statutory loss parameters.
+    \item $\mathcal{H}_{\text{crypto}}$ stores SHA-256 cryptographic digests of the input source slice, the active rule pack, and the execution timestamp, guaranteeing tamper-evident immutability.
+\end{itemize}
+
+\paragraph{Clean-Room Independent Verifier $V(R)$}
+To establish the operational sufficiency of record $R$, we design a clean-room independent verifier $V(R)$. The verifier operates under strict isolation: it possesses strictly zero access to raw source code, repository histories, git metadata, forward detector heuristics, or ground-truth labels. The verifier accepts exclusively the anonymized record $R$ and executes formal deductive inference rules:
+\begin{align}
+\text{GDPR Art.~32} &\Longleftarrow \left( \mathcal{P}_{\text{static}}(\text{HTTP}) \vee \mathcal{P}_{\text{static}}(\text{Password}) \right) \wedge \exists \langle v, \text{transmits\_to}, \texttt{sink\_http} \rangle \in \mathcal{G}_{\text{AST}} \\
+\text{GDPR Art.~5} &\Longleftarrow \mathcal{P}_{\text{static}}(\text{PII}) \wedge \exists \langle v, \text{assigned\_from}, \texttt{source\_pii} \rangle \in \mathcal{G}_{\text{AST}} \\
+\text{GDPR Art.~25} &\Longleftarrow \mathcal{P}_{\text{static}}(\text{Tracking}) \wedge \exists \langle v, \text{persisted\_in}, \texttt{sink\_storage} \rangle \in \mathcal{G}_{\text{AST}} \\
+\text{GDPR Art.~6} &\Longleftarrow \mathcal{P}_{\text{static}}(\text{ThirdParty}) \wedge \exists \langle v, \text{shared\_with}, \texttt{sink\_third\_party} \rangle \in \mathcal{G}_{\text{AST}}
+\end{align}
+
+If the arbitration decision indicates human deferral ($\pi^* = H$), the verifier immediately emits a corresponding deferral certificate $\hat{Y} = \langle \text{article}=0, \text{severity}=\text{high}, \text{target}=\text{defer\_to\_human} \rangle$.
+
+\paragraph{Sufficiency and Permutation Gap Formulation}
+We define the minimal sufficient audit record $R^*$ as the smallest subset of program facts that achieves verdict reconstructability equivalent to raw source inspection:
+\begin{equation}
+R^* = \arg\min_{R' \subseteq R} \left\{ |R'| \;\middle|\; \mathbb{E}\left[ \ell(V(R'), Y) \right] \le \mathbb{E}\left[ \ell(V(R), Y) \right] + \delta \right\}
+\end{equation}
+To formally prove that $V(R)$ reconstructs verdicts from the factual causal evidence in $R$ rather than exploiting fixed prior distributions, we benchmark $V(R)$ against a scrambled permutation baseline $V(R_{\text{permuted}})$, in which evidence-to-instance bindings are randomly shuffled across benchmark instances. The permutation degradation gap:
+\begin{equation}
+\Delta_{\text{rec}} = \text{Acc}(V(R)) - \text{Acc}(V(R_{\text{permuted}}))
+\end{equation}
+quantifies the net information contribution of the structured evidence graph $\mathcal{G}_{\text{AST}}$ and static predicates $\mathcal{P}_{\text{static}}$.
