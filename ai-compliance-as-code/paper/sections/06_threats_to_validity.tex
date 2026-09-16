@@ -1,0 +1,91 @@
+\section{Threats to Validity}
+\label{sec:threats_to_validity}
+
+In accordance with empirical software engineering guidelines~\cite{wohlin2012experimentation}, this section provides an adversarial examination of the methodological limitations, potential confounds, and boundary conditions of our study across \textit{Construct}, \textit{Internal}, \textit{External}, and \textit{Conclusion Validity}. For each identified threat, we document the specific mitigation implemented or explicitly acknowledge the absence of mitigation.
+
+\subsection{Construct Validity}
+Construct validity assesses whether the operationalized variables, evaluation tasks, and benchmark metrics faithfully capture the real-world properties of compliance defect detection, evidentiary sufficiency, and operational risk.
+
+\paragraph{Ground-Truth Ambiguity in Statutory Interpretation}
+Statutory compliance is inherently interpretive, context-dependent, and rarely reducible to deterministic boolean logic over an isolated code slice. Principles such as data minimization (GDPR Article 5) or privacy by design (GDPR Article 25) depend heavily on organizational context, processing purposes, and consent records outside the analyzed slice. For example, a method transmitting user location is legally compliant if gated by valid user consent or legitimate interest, yet in benchmark code slices lacking caller provenance, it is annotated as a non-compliant violation.
+\textit{Mitigation applied:} We expanded the decision space from forced binary classification to a cost-sensitive tri-choice reject option ($\mathcal{Y} \in \{S, L, H\}$) grounded in selective prediction~\cite{chow1970optimum}. When expected conditional risk exceeds the threshold of manual review ($R(H \mid x) \le \min(R(S \mid x), R(L \mid x))$), the router defers the instance to human compliance officers rather than committing to a high-risk automated decision.
+\textit{Unmitigated limitation:} Benchmark labels were adopted as fixed boolean ground-truth targets without soft probabilistic distributions or formal legal brief reconciliation. Where a regulatory provision admits competing legal interpretations, our evaluation necessarily treats the benchmark label as ground truth.
+
+\paragraph{Author-Engineered Rule Packs and Syntactic Overfitting}
+The symbolic rule-packs and Abstract Syntax Tree (AST) pattern extractors were developed by the study authors. This introduces the risk of retrospective tailoring, wherein rule definitions and regular expressions are inadvertently fitted to the specific syntactic idioms, variable names (e.g., \texttt{commingledPool}, \texttt{userPasswordToken}), and framework APIs present in the evaluation repositories.
+\textit{Mitigation applied:} Feature extraction for the learned router ($\phi(x)$) relies on structural and meta-syntactic properties (character length $\log_{10} L$, syntactic scope granularity, AST language indicators, and risk indicator counts) rather than matching rule-specific lexical strings. In the cross-regulatory MiCA transfer evaluation, all statute-specific article indicator weights were zeroed ($\beta_{\text{statutory}} \leftarrow 0$), evaluating the structural routing parameters zero-shot without adaptation.
+\textit{Unmitigated limitation:} The static scanner patterns were authored by the same researcher who evaluated the benchmark, without an independent, third-party rule authoring team or pre-registered specification prior to code inspection.
+
+\paragraph{Reconstruction Test Contamination (Contribution C3)}
+In evaluating whether an audit record $R$ is sufficient for independent verdict reconstruction, if the independent verifier $V(R)$ shares heuristics, lexical tokens, or deduction rules with the forward detectors, reconstruction accuracy may reflect circular tautology rather than genuine evidentiary sufficiency.
+\textit{Mitigation applied:} Strict clean-room isolation was enforced and statically verified: the verifier accepts exclusively the anonymized audit record $R$ and possesses zero access to source code, repository metadata, or forward evaluation modules. All code identifiers (variables, methods, and classes) are mapped to monotonic synthetic tokens (\texttt{var\_X}, \texttt{fn\_Y}, \texttt{class\_Z}). Furthermore, a permutation baseline ($R_{\text{permuted}}$) scrambles evidence-to-instance bindings, producing a statistically significant accuracy collapse from $90.0\%$ to $57.5\%$ ($\Delta_{\text{rec}} = +32.5\%$, paired McNemar exact test $p = 0.000122$, Fisher's exact test $p = 0.000924$), demonstrating that reconstruction relies on instance-specific evidence graphs rather than fixed label priors.
+\textit{Unmitigated limitation:} The verifier's inference engine was constructed by the same author who formalized the audit record schema. Although lexical leakage is eliminated, conceptual alignment between evidence premises and regulatory conclusions remains shared.
+
+\subsection{Internal Validity}
+Internal validity concerns whether the observed empirical outcomes (cost reductions, routing behavior, and calibration decomposition) are causally attributable to our arbitration strategies rather than hidden experimental artifacts.
+
+\paragraph{LLM Version Drift, Provider Updates, and Stochasticity}
+Commercial LLM APIs and local inference runtimes undergo continuous backend updates, parameter quantization adjustments, and system prompt sensitivity shifts. Non-zero sampling temperature introduces stochastic variability that shifts model calibration, Brier scores, and error surfaces.
+\textit{Mitigation applied:} All primary evaluation runs were executed at temperature $T=0.0$ (greedy decoding) and persisted in serialized checkpoint caches, ensuring reproducibility. Calibration decomposition was formally verified using Murphy's exact partition~\cite{murphy1973new} to validate that reliability ($REL$) and resolution ($RES$) satisfy theoretical identities.
+\textit{Unmitigated limitation:} No longitudinal drift study was conducted. Live queries to commercial API endpoints without cached checkpoints may yield divergent outputs due to upstream model modifications.
+
+\paragraph{Detector Inversion and LLM Swapping (Coupling of $\beta$)}
+The empirical routing weights ($\beta$) were estimated from the disagreement distribution between the static analyzer and a specific neural model family. Swapping the neural detector for an alternative architecture (e.g., moving from a local 3B model to a frontier cloud model) fundamentally alters the neural false-negative rate $P(Y=1, y_L=0 \mid x)$, which could degrade routing decisions trained on the original model's error boundary.
+\textit{Mitigation applied:} The cost-sensitive router computes conditional neural risk $R(L \mid x)$ as a continuous function of the LLM's verbalized confidence score $c_L \in [0.0, 1.0]$, decoupling operational error penalties from static error rate assumptions.
+\textit{Unmitigated limitation:} The routing weights $\beta$ were not cross-validated across multiple distinct LLM families. The empirical parameters remain conditionally tied to the training detector pair.
+
+\subsection{External Validity}
+External validity addresses the generalizability of our findings across diverse software codebases, application architectures, and regulatory regimes.
+
+\paragraph{Benchmark Composition: 52.31\% Single-RAT Concentration}
+Inspection of the 887 snippets in GDPR-Bench-Android reveals severe repository concentration: a single repository (\texttt{AhMyth-Android-RAT}) accounts for 464 out of 887 snippets ($52.31\%$). Across the full benchmark, over $72\%$ of snippets originate from Remote Access Trojans (RATs) and surveillance software (\texttt{AhMyth}, \texttt{AndroSpy}, \texttt{Android\_Spy\_App}, \texttt{Rafel\_Rat}, \texttt{AndroRAT}). Malware source code exhibits aggressive exfiltration patterns, evasion idioms, and non-standard coding practices that do not reflect legitimate enterprise software engineering.
+\textit{Mitigation applied:} In nested cross-validation, folds were strictly partitioned across instances. To test generalizability beyond mobile malware, we developed the MiCA transfer benchmark, evaluating the frozen router on production crypto-asset infrastructure (custodial key managers, exchange order books, and payment gateways).
+\textit{Unmitigated limitation:} No down-sampling or de-duplication was applied to \texttt{AhMyth-Android-RAT} in the GDPR benchmark. The reported GDPR performance reflects an evaluation set heavily concentrated on mobile surveillance code.
+
+\paragraph{MiCA Transfer Set Annotation by Author vs. Regulatory Counsel}
+The MiCA transfer benchmark was annotated by the study authors rather than licensed European financial regulatory attorneys or compliance officers at authorized Crypto-Asset Service Providers (CASPs).
+\textit{Mitigation applied:} We enforced a strict \textit{Code-Level Observability Rule}, explicitly restricting the benchmark to four mechanically verifiable technical articles (Article 67 custody segregation, Article 68 transaction audit trails, Article 76 market abuse monitoring, and Article 82 Travel Rule metadata) while programmatically excluding organizational governance articles (Articles 16, 30, 33, 34, 61, 72, 74). Annotator reliability was quantified using Cohen's Kappa ($\kappa = 0.8571$), exceeding the $\kappa \ge 0.70$ baseline agreement threshold.
+\textit{Unmitigated limitation:} Annotators were internal researchers. No formal compliance audit or advisory opinion was obtained from an EU National Competent Authority (NCA).
+
+\subsection{Conclusion Validity}
+Conclusion validity assesses whether our statistical tests, cost modeling assumptions, and performance claims are methodologically sound.
+
+\paragraph{Sensitivity to Asymmetric Operational Cost Weights ($c_{FN}, c_{FP}, c_H$)}
+Our finding that Policy 4 (cost-sensitive arbitration) outperforms Policy 1 (fixed confidence merge) is grounded in asymmetric error costs ($c_{FN}=1.0, c_{FP}=0.1, c_H=0.25$). In operating environments where false alarms impose severe deployment friction ($c_{FP} \approx c_{FN}$) or where human compliance review is exceptionally costly ($c_H \gg 1.0$), the relative efficiency of selective deferral alters.
+\textit{Mitigation applied:} We evaluated the full empirical Pareto frontier across rejection thresholds $\tau \in [0.1, 0.9]$, demonstrating that Policy 4 Pareto-dominates the baseline across the entire convex hull rather than at an isolated operating point.
+\textit{Unmitigated limitation:} Real-world regulatory fines and enforcement actions are non-linear, discrete, and subject to supervisory discretion. Our linear loss model serves as a tractable analytical surrogate for operational compliance risk.
+
+\paragraph{Statistical Power on Stratified Partitions}
+While the aggregate benchmark ($N=887$) provides sufficient power for primary comparisons, stratification by article or granularity results in small sub-sample sizes (e.g., $N=7$ per article in the MiCA transfer set), diminishing the power of asymptotic tests.
+\textit{Mitigation applied:} We reported exact non-parametric tests: paired McNemar exact binomial tests and Fisher's exact tests for small contingency cells, Wilson score intervals for all proportions, and Benjamini-Hochberg False Discovery Rate ($q$-values) for multiple feature hypothesis testing.
+\textit{Unmitigated limitation:} On small strata, statistical power is inherently constrained, limiting the ability to resolve subtle effect sizes at the sub-article level.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Adversarial Threats to Validity: Taxonomical Breakdown, Applied Mitigations, and Residual Limitations.}
+\label{tab:threats_summary}
+\begin{tabular}{p{2.2cm}p{3.8cm}p{5.0cm}p{4.8cm}}
+\toprule
+\textbf{Dimension} & \textbf{Threat / Confounder} & \textbf{Mitigation Applied in Codebase} & \textbf{Acknowledged Residual Limitation} \\
+\midrule
+\textbf{Construct} & Statutory ground-truth ambiguity & Tri-choice reject option ($\pi = \text{abstain}$) defers epistemic uncertainty to human review & Ground truth remains binary; no soft or probabilistic legal labels \\
+\addlinespace
+\textbf{Construct} & Author-authored rule-packs & Feature extraction uses structural meta-features ($\phi_{\text{structural}}$); zero-shot transfer & Rules written by same author; no independent third-party authoring committee \\
+\addlinespace
+\textbf{Construct} & Reconstruction test contamination & Clean-room AST isolation; synthetic identifier anonymization; permutation baseline drop & Verifier inference logic constructed by same author who designed record schema \\
+\addlinespace
+\textbf{Internal} & LLM version drift \& stochasticity & Greedy decoding ($T=0.0$); serialized JSONL checkpoints; exact Murphy calibration & No longitudinal drift study; live API queries may diverge without cached checkpoints \\
+\addlinespace
+\textbf{Internal} & Detector coupling of router weights ($\beta$) & Continuous confidence elicitation $c_L$; structural decoupling of probability and cost & Router weights $\beta$ not cross-validated across multiple distinct LLM families \\
+\addlinespace
+\textbf{External} & Benchmark composition ($52.31\%$ single-RAT) & Nested CV across instances; transfer evaluation on crypto financial infrastructure & No de-duplication of \texttt{AhMyth}; GDPR set remains heavily mobile-spyware skewed \\
+\addlinespace
+\textbf{External} & Author MiCA annotation & Strict Code-Level Observability Rule; excluded governance; inter-rater $\kappa = 0.8571$ & Annotations conducted by researchers rather than licensed EU regulatory attorneys \\
+\addlinespace
+\textbf{Conclusion} & Cost parameter sensitivity & Full Pareto frontier across $\tau \in [0.1, 0.9]$; dominates across entire convex hull & Linear cost formulation is an idealized surrogate for non-linear legal penalties \\
+\addlinespace
+\textbf{Conclusion} & Statistical power on sub-strata & Exact binomial McNemar and Fisher tests; Wilson intervals; Benjamini-Hochberg FDR & Small partitions ($N=7$ per MiCA article) lack power to resolve minor effect sizes \\
+\bottomrule
+\end{tabular}
+\end{table*}
